@@ -95,7 +95,7 @@ class AgentController:
         state = TaskState(goal=goal)
 
         yield f"🚀 [AgentController] Memulai tugas otonom: '{goal}'\n"
-        yield f"📌 [Capabilities] {cap_map.platform_os} | Python {cap_map.python_version} | Tools: {len(self._registry.list_all())}\n\n"
+        yield f"📌 [Capabilities] {cap_map.os_platform} | Python {cap_map.python_version} | Tools: {len(self._registry.list_all())}\n\n"
 
         while True:
             # 1. Periksa batas anggaran eksekusi
