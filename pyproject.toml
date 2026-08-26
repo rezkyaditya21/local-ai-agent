@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "local-ai-agent"
+version = "0.1.0"
+description = "A fully local AI agent with terminal interface"
+requires-python = ">=3.11"
+dependencies = [
+    "rich>=13.7",
+    "llama-cpp-python>=0.2.90",
+    "httpx[http2]>=0.27",
+    "playwright>=1.44",
+    "sqlalchemy>=2.0",
+    "cryptography>=42.0",
+    "tomli-w>=1.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "hypothesis>=6.100",
+    "pytest-mock>=3.12",
+]
+
+[project.scripts]
+agent = "agent.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["agent*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.hypothesis]
+database_directory = ".hypothesis"

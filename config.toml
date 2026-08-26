@@ -1,0 +1,26 @@
+default_model = "llama3.2:3b"
+tool_directories = []
+sandbox_enabled = false
+shell_timeout_seconds = 30
+log_path = "audit.log"
+max_consecutive_actions = 10
+
+# ---------------------------------------------------------------------------
+# Opsi 1: Model via Ollama API
+# ---------------------------------------------------------------------------
+[[models]]
+name = "llama3.2:3b"
+model_type = "api"
+path_or_url = "http://localhost:11434"
+
+# ---------------------------------------------------------------------------
+# Opsi 2: Model GGUF Lokal Langsung (Isi path ke file .gguf Anda)
+# ---------------------------------------------------------------------------
+[[models]]
+name = "model_gguf_lokal"
+model_type = "gguf"
+path_or_url = "C:/path/ke/model_anda.gguf"
+
+[model_parameters]
+temperature = 0.7
+context_length = 4096
