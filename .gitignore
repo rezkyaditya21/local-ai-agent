@@ -42,3 +42,4 @@ Thumbs.db
 audit.log
 memory.json
 checkpoints/
+.kiro/
