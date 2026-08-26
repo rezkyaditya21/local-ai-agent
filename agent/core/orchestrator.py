@@ -237,16 +237,16 @@ class Agent:
         # Riwayat sesi: oldest → newest
         self._history: list[InteractionRecord] = []
 
-    async def process_autonomous(self, goal: str, budget: Any = None) -> AsyncIterator[str]:
-        """Proses tugas otonom closed-loop melalui AgentController."""
-        async for token in self.controller.execute_task(goal, budget=budget):
-            yield token
-
         # Event untuk sinyal stop
         self._stop_event: asyncio.Event = asyncio.Event()
 
         # Task yang sedang berjalan (untuk cancel pada stop())
         self._active_tasks: set[asyncio.Task] = set()
+
+    async def process_autonomous(self, goal: str, budget: Any = None) -> AsyncIterator[str]:
+        """Proses tugas otonom closed-loop melalui AgentController."""
+        async for token in self.controller.execute_task(goal, budget=budget):
+            yield token
 
     # ------------------------------------------------------------------
     # Public API
