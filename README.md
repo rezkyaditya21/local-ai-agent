@@ -1,11 +1,11 @@
 # 🤖 Local AI Agent — Autonomous Engineering System
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Python-3.11%2B-blue?style=for-the-badge&logo=python" alt="Python 3.11+">
-  <img src="https://img.shields.io/badge/Tests-100%25%20Passed-brightgreen?style=for-the-badge&logo=pytest" alt="Pytest Passed">
-  <img src="https://img.shields.io/badge/Architecture-Autonomous%20Loop-orange?style=for-the-badge" alt="Autonomous AI Agent">
-  <img src="https://img.shields.io/badge/Backend-Ollama%20%7C%20GGUF-purple?style=for-the-badge" alt="Ollama & GGUF">
-  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License MIT">
+  <a href="https://github.com/rezkyaditya21/local-ai-agent"><img src="https://img.shields.io/badge/Python-3.11%2B-blue?style=for-the-badge&logo=python" alt="Python 3.11+"></a>
+  <a href="https://github.com/rezkyaditya21/local-ai-agent"><img src="https://img.shields.io/badge/Tests-100%25%20Passed-brightgreen?style=for-the-badge&logo=pytest" alt="Pytest Passed"></a>
+  <a href="https://github.com/rezkyaditya21/local-ai-agent"><img src="https://img.shields.io/badge/Architecture-Autonomous%20Loop-orange?style=for-the-badge" alt="Autonomous AI Agent"></a>
+  <a href="https://github.com/rezkyaditya21/local-ai-agent"><img src="https://img.shields.io/badge/Backend-Ollama%20%7C%20GGUF-purple?style=for-the-badge" alt="Ollama & GGUF"></a>
+  <a href="https://github.com/rezkyaditya21/local-ai-agent/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License MIT"></a>
 </p>
 
 ---
