@@ -86,19 +86,43 @@ class ToolInterface(Protocol):
 
 
 @dataclass
+class ToolMetadata:
+    """Metadata lengkap untuk setiap tool."""
+
+    name: str
+    description: str
+    schema: dict
+    permissions: list[str] = field(default_factory=lambda: ["read"])
+    risk_level: str = "low"  # "low" | "medium" | "high"
+    timeout: float = 30.0
+    output_limits: int = 10000
+    availability: bool = True
+
+
+@dataclass
 class ToolEntry:
     """Pembungkus tool di dalam registry beserta metadata.
 
     Attributes:
         tool: Instansi tool yang memenuhi `ToolInterface`.
-        enabled: Status aktif/nonaktif tool. Hanya tool yang `enabled=True`
-            yang dapat diambil via `ToolRegistry.get()`.
+        enabled: Status aktif/nonaktif tool.
         source: Asal tool; salah satu dari ``"builtin"`` atau ``"plugin"``.
+        metadata: Metadata terstruktur tool.
     """
 
     tool: ToolInterface
     enabled: bool = True
     source: str = "builtin"  # "builtin" | "plugin"
+    metadata: ToolMetadata = field(default_factory=lambda: ToolMetadata(name="", description="", schema={}))
+
+    def __post_init__(self) -> None:
+        if not self.metadata.name and hasattr(self.tool, "name"):
+            self.metadata = ToolMetadata(
+                name=getattr(self.tool, "name", ""),
+                description=getattr(self.tool, "description", ""),
+                schema=getattr(self.tool, "input_schema", {}),
+                risk_level="high" if getattr(self.tool, "name", "") in ("shell", "filesystem") else "low",
+            )
 
 
 # ---------------------------------------------------------------------------

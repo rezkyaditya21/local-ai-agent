@@ -31,21 +31,48 @@ class MemoryEntry:
 
 
 class MemorySystem:
-    """Sistem memori berlapis untuk Agent.
-
-    Memisahkan:
-    1. Short-Term / Working Memory: konteks tugas aktif yang sedang berjalan.
-    2. Long-Term Memory: fakta, solusi bug, dan aturan yang tersimpan secara permanen.
-    3. Project Knowledge: pengetahuan tentang struktur repositori & konvensi.
-    4. Task History: riwayat tugas dan hasil eksekusi sebelumnya.
+    """Sistem memori 7-layer untuk Agent:
+    1. Working Memory: state tugas aktif.
+    2. Task Memory: riwayat langkah subtask.
+    3. Project Memory: pengetahuan repositori.
+    4. Episodic Memory: episik interaksi sebelumnya.
+    5. Long-Term Knowledge: fakta, bugfix, dan aturan.
+    6. Tool Knowledge: catatan penggunaan tool.
+    7. Self Knowledge: kemampuan agent, pola kegagalan tool, strategi sukses, & data debugging.
     """
 
     def __init__(self, storage_path: Path | None = None) -> None:
         self._storage_path = storage_path or (Path.home() / ".config" / "local-ai-agent" / "memory.json")
         self._working_memory: dict[str, Any] = {}
+        self._task_memory: list[dict[str, Any]] = []
         self._long_term_memories: dict[str, MemoryEntry] = {}
         self._project_knowledge: dict[str, Any] = {}
+        self._self_knowledge: dict[str, Any] = {
+            "tool_failure_patterns": {},
+            "successful_strategies": [],
+            "debugging_experiences": [],
+        }
         self._load_storage()
+
+    # ------------------------------------------------------------------
+    # Self Knowledge Layer
+    # ------------------------------------------------------------------
+
+    def record_tool_failure(self, tool_name: str, error_pattern: str) -> None:
+        """Catat pola kegagalan tool ke Self Knowledge."""
+        failures = self._self_knowledge.setdefault("tool_failure_patterns", {})
+        failures[tool_name] = failures.get(tool_name, 0) + 1
+        self._save_storage()
+
+    def record_successful_strategy(self, task_goal: str, strategy_summary: str) -> None:
+        """Catat strategi sukses ke Self Knowledge."""
+        strategies = self._self_knowledge.setdefault("successful_strategies", [])
+        strategies.append({"goal": task_goal, "strategy": strategy_summary, "timestamp": datetime.now(timezone.utc).isoformat()})
+        self._save_storage()
+
+    def get_self_knowledge(self, key: str, default: Any = None) -> Any:
+        """Ambil entri dari Self Knowledge."""
+        return self._self_knowledge.get(key, default)
 
     # ------------------------------------------------------------------
     # Short-Term / Working Memory

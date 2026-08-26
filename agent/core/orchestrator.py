@@ -224,8 +224,23 @@ class Agent:
         self._planner = planner or MultiStepPlanner()
         self._system_inspector = system_inspector or SystemInspector()
 
+        from agent.core.controller import AgentController
+        self.controller = AgentController(
+            model_manager=model_manager,
+            executor=executor,
+            registry=getattr(executor, "_registry", None),
+            audit_logger=audit_logger,
+            memory_system=self._memory,
+            planner=self._planner,
+        )
+
         # Riwayat sesi: oldest → newest
         self._history: list[InteractionRecord] = []
+
+    async def process_autonomous(self, goal: str, budget: Any = None) -> AsyncIterator[str]:
+        """Proses tugas otonom closed-loop melalui AgentController."""
+        async for token in self.controller.execute_task(goal, budget=budget):
+            yield token
 
         # Event untuk sinyal stop
         self._stop_event: asyncio.Event = asyncio.Event()
