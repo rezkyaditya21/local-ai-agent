@@ -42,8 +42,8 @@ from agent.core.exceptions import (
 # ---------------------------------------------------------------------------
 
 MAX_GGUF_SIZE_BYTES: int = 100 * 1024 * 1024 * 1024  # 100 GB
-MODEL_LOAD_TIMEOUT_SECONDS: int = 10
-MODEL_SWITCH_TIMEOUT_SECONDS: int = 30
+MODEL_LOAD_TIMEOUT_SECONDS: int = 120
+MODEL_SWITCH_TIMEOUT_SECONDS: int = 120
 
 # Rentang valid untuk parameter model
 TEMPERATURE_MIN: float = 0.0
@@ -324,6 +324,7 @@ class ModelManager:
         self,
         prompt: str,
         history: list,
+        model_name: str | None = None,
     ) -> AsyncIterator[str]:
         """Stream token dari model aktif satu per satu.
 
@@ -342,15 +343,28 @@ class ModelManager:
             history: Riwayat percakapan (list of dicts atau
                 :class:`~agent.models.schemas.InteractionRecord`).
                 Format disesuaikan masing-masing backend.
+            model_name: Nama model spesifik untuk call ini. Jika None,
+                gunakan model aktif. Jika diberikan, gunakan model
+                tersebut (untuk model routing).
 
         Yields:
             String token satu per satu.
         """
-        if self._active_model is None:
+        # Tentukan model yang akan digunakan
+        model = self._active_model
+
+        if model_name and model_name != (self._active_model.name if self._active_model else ""):
+            # Cari model berdasarkan nama
+            for m in self._models:
+                if m.name == model_name:
+                    model = m
+                    break
+            else:
+                yield f"[Warning: Model '{model_name}' tidak ditemukan, menggunakan model aktif]"
+
+        if model is None:
             yield "[Error: Tidak ada model aktif. Gunakan /model use <nama>]"
             return
-
-        model = self._active_model
 
         if model.model_type == "gguf":
             async for token in self._generate_gguf(prompt, history):
@@ -608,12 +622,14 @@ class ModelManager:
         system_prompt = f"""Kamu adalah Autonomous Local AI Agent yang berjalan di komputer pengguna. Waktu/Tanggal saat ini adalah: {current_date_str}.
 Kamu memiliki akses penuh ke sistem lokal, terminal, pencarian berkas/kode, eksekusi tes, Git, dan akses internet.
 
-ATURAN UTAMA JAWABAN:
+ATURAN UTAMA:
 1. Jawab secara SINGKAT, RINGKAS, PADAT, dan LANGSUNG KE FAKTA/POIN UTAMA.
-2. Ketika menggunakan `web_search`:
+2. PERINGATAN PENTING: Gunakan tool HANYA jika user secara eksplisit meminta kamu melakukan sesuatu yang memerlukan tool (baca file, jalankan perintah, cari kode, eksekusi tes, dll).
+3. Untuk sapaan, pertanyaan umum, percakapan biasa — jawab langsung dengan teks biasa. JANGAN gunakan tool.
+4. Ketika menggunakan `web_search`:
    - Gunakan kata kunci (`query`) yang SPESIFIK dan JELAS.
    - Sampaikan RINGKASAN FAKTA ATAU ISI INFORMASINYA untuk menjawab pertanyaan pengguna.
-3. Untuk tugas rekayasa perangkat lunak (refactoring/testing/bugfix), lakukan analisa, modifikasi kode, dan verifikasi tes secara otonom.
+5. Untuk tugas rekayasa perangkat lunak (refactoring/testing/bugfix), lakukan analisa, modifikasi kode, dan verifikasi tes secara otonom.
 
 Untuk menggunakan tool, output JSON block dengan format ini:
 {{"tool": "nama_tool", "params": {{"key": "value"}}}}
@@ -683,7 +699,7 @@ Setelah tool dieksekusi, sampaikan FAKTA/ISI INFORMASI penting secara singkat, t
                             break
 
         except httpx.TimeoutException:
-            yield f"[Error: timeout setelah {MODEL_SWITCH_TIMEOUT_SECONDS} detik]"
+            yield f"[Error: timeout setelah {api_timeout.connect}s connect / {api_timeout.read}s read]"
         except httpx.HTTPStatusError as exc:
             yield f"[Error: HTTP {exc.response.status_code}]"
         except Exception as exc:  # noqa: BLE001

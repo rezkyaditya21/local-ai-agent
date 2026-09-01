@@ -25,7 +25,7 @@ class MemoryEntry:
 
     key: str
     content: str
-    category: str  # "rule", "bugfix", "fact", "pattern"
+    category: str  # "rule", "bugfix", "fact", "pattern", "strategy"
     created_at: str
     relevance_score: float = 1.0
 
@@ -68,11 +68,27 @@ class MemorySystem:
         """Catat strategi sukses ke Self Knowledge."""
         strategies = self._self_knowledge.setdefault("successful_strategies", [])
         strategies.append({"goal": task_goal, "strategy": strategy_summary, "timestamp": datetime.now(timezone.utc).isoformat()})
+        # Keep max 50 strategies
+        if len(strategies) > 50:
+            strategies[:] = strategies[-50:]
         self._save_storage()
 
     def get_self_knowledge(self, key: str, default: Any = None) -> Any:
         """Ambil entri dari Self Knowledge."""
         return self._self_knowledge.get(key, default)
+
+    def record_debugging_experience(self, goal: str, diagnosis: str, resolution: str) -> None:
+        """Catat pengalaman debugging ke Self Knowledge."""
+        experiences = self._self_knowledge.setdefault("debugging_experiences", [])
+        experiences.append({
+            "goal": goal,
+            "diagnosis": diagnosis,
+            "resolution": resolution,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        if len(experiences) > 20:
+            experiences[:] = experiences[-20:]
+        self._save_storage()
 
     # ------------------------------------------------------------------
     # Short-Term / Working Memory
@@ -89,6 +105,32 @@ class MemorySystem:
     def clear_working(self) -> None:
         """Kosongkan Working Memory setelah tugas selesai."""
         self._working_memory.clear()
+
+    def get_all_working(self) -> dict[str, Any]:
+        """Ambil semua Working Memory."""
+        return dict(self._working_memory)
+
+    # ------------------------------------------------------------------
+    # Task Memory (riwayat langkah)
+    # ------------------------------------------------------------------
+
+    def add_task_step(self, goal: str, step: int, action: str, result: str, status: str) -> None:
+        """Tambah satu langkah ke Task Memory."""
+        self._task_memory.append({
+            "goal": goal,
+            "step": step,
+            "action": action,
+            "result": result,
+            "status": status,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+
+    def get_task_history(self, goal: str | None = None, limit: int = 10) -> list[dict[str, Any]]:
+        """Ambil riwayat task memory, difilter per goal jika diperlukan."""
+        if goal:
+            filtered = [t for t in self._task_memory if t.get("goal") == goal]
+            return filtered[-limit:]
+        return self._task_memory[-limit:]
 
     # ------------------------------------------------------------------
     # Long-Term Memory
@@ -134,6 +176,39 @@ class MemorySystem:
         return self._project_knowledge
 
     # ------------------------------------------------------------------
+    # Context Builder — untuk execution loop
+    # ------------------------------------------------------------------
+
+    def build_context_for_goal(self, goal: str) -> dict[str, Any]:
+        """Bangun konteks memori lengkap untuk tujuan tertentu.
+
+        Mengembalikan dict dengan semua layer memori yang relevan.
+        """
+        return {
+            "working": self.get_all_working(),
+            "task_history": self.get_task_history(goal, limit=5),
+            "long_term": self.search_long_term(goal, limit=5),
+            "project_knowledge": self.get_project_knowledge(),
+            "self_knowledge": {
+                "tool_failure_patterns": self._self_knowledge.get("tool_failure_patterns", {}),
+                "successful_strategies": self._self_knowledge.get("successful_strategies", [])[-3:],
+                "debugging_experiences": self._self_knowledge.get("debugging_experiences", [])[-3:],
+            },
+        }
+
+    def store_task_result(self, goal: str, strategy: str, success: bool) -> None:
+        """Simpan hasil task ke memori berdasarkan outcome."""
+        if success:
+            self.record_successful_strategy(goal, strategy)
+        else:
+            # Record as a failed experience for future reference
+            self.record_debugging_experience(
+                goal=goal,
+                diagnosis="Task did not complete successfully",
+                resolution=f"Strategy used: {strategy}",
+            )
+
+    # ------------------------------------------------------------------
     # Internal Storage (JSON Persistence)
     # ------------------------------------------------------------------
 
@@ -153,6 +228,8 @@ class MemorySystem:
                     created_at=v.get("created_at", ""),
                 )
             self._project_knowledge = data.get("project_knowledge", {})
+            self._self_knowledge = data.get("self_knowledge", self._self_knowledge)
+            self._task_memory = data.get("task_memory", [])
         except Exception as exc:
             _logger.warning("Gagal membaca storage memori: %s", exc)
 
@@ -162,6 +239,8 @@ class MemorySystem:
             data = {
                 "long_term": {k: asdict(v) for k, v in self._long_term_memories.items()},
                 "project_knowledge": self._project_knowledge,
+                "self_knowledge": self._self_knowledge,
+                "task_memory": self._task_memory[-100:],  # Keep last 100 steps
             }
             with open(self._storage_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)

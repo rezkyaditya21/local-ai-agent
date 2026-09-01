@@ -14,6 +14,7 @@ from agent.tools.registry import ToolRegistry
 from agent.tools.shell import ShellTool
 from agent.tools.system_inspect import SystemInspectTool
 from agent.tools.test_runner import TestRunnerTool
+from agent.tools.tool_creator import ToolCreator
 from agent.tools.web_search import WebSearchTool
 
 __all__ = [
@@ -27,6 +28,7 @@ __all__ = [
     "PluginLoader",
     "ProjectInspectTool",
     "PythonExecTool",
+    "ToolCreator",
     "ToolRegistry",
     "ShellTool",
     "SystemInspectTool",

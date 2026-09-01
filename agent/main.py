@@ -33,6 +33,13 @@ import signal
 import sys
 from pathlib import Path
 
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 # ---------------------------------------------------------------------------
 # Setup logging dasar (sebelum import modul lain)
 # ---------------------------------------------------------------------------
@@ -49,6 +56,7 @@ logging.basicConfig(
 from agent.cli.interface import CLI, CLIConfig
 from agent.core.audit_logger import AuditLogger
 from agent.core.blocklist import Blocklist
+from agent.core.budget import ExecutionBudget
 from agent.core.confirmation_gate import ConfirmationGate
 from agent.core.credential_vault import CredentialVault
 from agent.core.executor import Executor
@@ -165,7 +173,12 @@ def create_app(
     _initial_model = model  # simpan untuk digunakan di main()
 
     # ------------------------------------------------------------------ #
-    # 8. Executor — menjalankan tool calls dengan pemeriksaan keamanan
+    # 8. ExecutionBudget — dari config [execution_budget]
+    # ------------------------------------------------------------------ #
+    budget = ExecutionBudget.from_config(_read_config_dict(resolved_config))
+
+    # ------------------------------------------------------------------ #
+    # 9. Executor — menjalankan tool calls dengan pemeriksaan keamanan
     # ------------------------------------------------------------------ #
     executor = Executor(
         registry=registry,
@@ -175,7 +188,7 @@ def create_app(
     )
 
     # ------------------------------------------------------------------ #
-    # 9. SelfImprovementModule + BackupManager
+    # 10. SelfImprovementModule + BackupManager
     # ------------------------------------------------------------------ #
     backup_manager = BackupManager(backup_dir=_DEFAULT_BACKUP_DIR)
     sim = SelfImprovementModule(
@@ -186,7 +199,7 @@ def create_app(
     )
 
     # ------------------------------------------------------------------ #
-    # 10. Agent Orchestrator
+    # 11. Agent Orchestrator
     # ------------------------------------------------------------------ #
     agent = Agent(
         model_manager=model_manager,
@@ -194,6 +207,7 @@ def create_app(
         confirmation_gate=confirmation_gate,
         audit_logger=audit_logger,
         blocklist=blocklist,
+        budget=budget,
     )
 
     # ------------------------------------------------------------------ #
@@ -417,6 +431,20 @@ def _read_log_path_from_config(config_path: Path) -> str:
         return config.get("log_path", _DEFAULT_LOG_FILENAME)
     except Exception:
         return _DEFAULT_LOG_FILENAME
+
+
+def _read_config_dict(config_path: Path) -> dict:
+    """Baca seluruh config.toml sebagai dict.
+
+    Returns:
+        Dict konfigurasi, atau dict kosong jika file tidak ada atau tidak valid.
+    """
+    try:
+        import tomllib
+        with open(config_path, "rb") as f:
+            return tomllib.load(f)
+    except Exception:
+        return {}
 
 
 def _create_minimal_config(config_path: Path) -> None:

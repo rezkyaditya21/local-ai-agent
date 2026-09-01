@@ -13,6 +13,7 @@ Requirements yang diimplementasikan: 9.1, 9.2, 9.3, 9.5, 9.6, 9.7
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
@@ -210,6 +211,23 @@ class ToolRegistry:
             konsisten.
         """
         return sorted(self._tools.values(), key=lambda e: e.tool.name)
+
+    def format_catalog(self, max_schema_chars: int = 400) -> str:
+        """Katalog tool aktif (nama, deskripsi, input_schema) untuk prompt model."""
+        lines: list[str] = []
+        for entry in self.list_all():
+            if not entry.enabled:
+                continue
+            tool = entry.tool
+            try:
+                schema_s = json.dumps(tool.input_schema, ensure_ascii=False, separators=(",", ":"))
+            except (TypeError, ValueError):
+                schema_s = str(tool.input_schema)
+            if len(schema_s) > max_schema_chars:
+                schema_s = schema_s[:max_schema_chars] + "..."
+            desc = (tool.description or "").strip().replace("\n", " ")
+            lines.append(f"- {tool.name}: {desc}\n  input_schema: {schema_s}")
+        return "\n".join(lines) if lines else "(tidak ada tool aktif)"
 
     def enable(self, name: str) -> None:
         """Aktifkan tool berdasarkan nama.

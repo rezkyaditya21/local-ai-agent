@@ -5,14 +5,7 @@ import pytest
 from pathlib import Path
 
 
-# ---------------------------------------------------------------------------
-# Event loop
-# ---------------------------------------------------------------------------
 
-@pytest.fixture(scope="session")
-def event_loop_policy():
-    """Use the default asyncio event loop policy for the entire test session."""
-    return asyncio.DefaultEventLoopPolicy()
 
 
 # ---------------------------------------------------------------------------

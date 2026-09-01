@@ -284,6 +284,27 @@ class CLI:
             await self._do_rollback()
             return True
 
+        # /autonomous <goal> atau /auto <goal>
+        if cmd in ("/autonomous", "/auto"):
+            if len(parts) < 2:
+                self._console.print(
+                    "[bold red]Penggunaan:[/bold red] /autonomous <goal>"
+                )
+                return True
+            goal = " ".join(parts[1:])
+            await self._process_autonomous(goal)
+            return True
+
+        # /memory
+        if cmd == "/memory":
+            self._show_memory()
+            return True
+
+        # /debug
+        if cmd == "/debug":
+            await self._show_debug()
+            return True
+
         # Command tidak dikenal yang dimulai dengan /
         self._console.print(
             f"[bold red]Command tidak dikenal:[/bold red] '{cmd}'. "
@@ -407,7 +428,7 @@ class CLI:
                     ("/stop", "bold"),
                     (" untuk keluar.", "dim"),
                 ),
-                title="[bold green]🤖 AI Agent[/bold green]",
+                title="[bold green]AI Agent[/bold green]",
                 border_style="green",
             )
         )
@@ -428,6 +449,10 @@ class CLI:
             ("/tools list", "Tampilkan semua tool beserta status aktif/nonaktif"),
             ("/tools enable <nama>", "Aktifkan tool yang sedang dinonaktifkan"),
             ("/tools disable <nama>", "Nonaktifkan tool tanpa menghapusnya"),
+            ("/autonomous <goal>", "Jalankan agent dalam mode otonom penuh (closed-loop)"),
+            ("/auto <goal>", "Alias untuk /autonomous"),
+            ("/memory", "Tampilkan status memori agent"),
+            ("/debug", "Tampilkan laporan kesehatan sistem"),
             ("/rollback", "Pulihkan konfigurasi Agent ke versi backup terakhir"),
         ]
 
@@ -471,10 +496,14 @@ class CLI:
         """Ganti model aktif dengan spinner (Req 7.4)."""
         self._console.print(f"Mengganti model ke [bold]{name}[/bold]...")
 
+        success = False
+        error_msg: str | None = None
+
         with Live(
             Spinner(_SPINNER_NAME, text=f"Memuat model '{name}'..."),
             console=self._console,
             refresh_per_second=5,
+            transient=True,
         ):
             try:
                 from agent.core.exceptions import (
@@ -482,17 +511,22 @@ class CLI:
                     AgentModelLoadTimeoutError,
                 )
                 await self._model_manager.switch_model(name)
-                self._console.print(
-                    f"[bold green]✓[/bold green] Model diganti ke [bold]{name}[/bold]."
-                )
+                success = True
             except AgentModelNotFoundError as exc:
-                self._console.print(f"[bold red]✗[/bold red] {exc}")
+                error_msg = str(exc)
             except AgentModelLoadTimeoutError as exc:
-                self._console.print(f"[bold red]✗[/bold red] {exc}")
+                error_msg = str(exc)
             except Exception as exc:
-                self._console.print(
-                    f"[bold red]✗[/bold red] Gagal mengganti model: {exc}"
-                )
+                error_msg = f"Gagal mengganti model: {exc}"
+
+        if success:
+            self._console.print(
+                f"[bold green]✓[/bold green] Model berhasil diganti ke [bold]{name}[/bold]."
+            )
+        else:
+            self._console.print(
+                f"[bold red]✗[/bold red] {error_msg}"
+            )
 
     def _show_tools_list(self) -> None:
         """Tampilkan semua tool beserta statusnya (Req 9.4)."""
@@ -561,6 +595,64 @@ class CLI:
             )
         except Exception as exc:
             self._console.print(f"[bold red]✗[/bold red] Rollback gagal: {exc}")
+
+    async def _process_autonomous(self, goal: str) -> None:
+        """Jalankan agent dalam mode otonom penuh (closed-loop)."""
+        self._console.print(
+            Panel(
+                f"[bold]{goal}[/bold]",
+                title="[bold green]Autonomous Mode[/bold green]",
+                subtitle="Agent akan loop sampai goal tercapai atau budget habis",
+                border_style="green",
+            )
+        )
+
+        collected: list[str] = []
+        try:
+            async for token in self._agent.process_autonomous(goal):
+                collected.append(token)
+                self._console.print(token, end="", highlight=False)
+        except KeyboardInterrupt:
+            self._console.print("\n[yellow]Autonomous mode dihentikan oleh pengguna.[/yellow]")
+        except Exception as exc:
+            self._console.print(f"\n[bold red]Error: {exc}[/bold red]")
+        finally:
+            if collected:
+                self._console.print()
+
+    def _show_memory(self) -> None:
+        """Tampilkan status memori agent."""
+        memory = self._agent._memory
+        working = memory.get_all_working()
+        task_hist = memory.get_task_history(limit=5)
+        self_knowledge = memory.get_self_knowledge("tool_failure_patterns", {})
+        strategies = memory.get_self_knowledge("successful_strategies", [])
+
+        table = Table(title="Agent Memory", show_header=True, header_style="bold cyan")
+        table.add_column("Layer", style="bold")
+        table.add_column("Status")
+
+        table.add_row("Working Memory", f"{len(working)} entries" if working else "Kosong")
+        table.add_row("Task History", f"{len(task_hist)} langkah terakhir")
+        table.add_row("Tool Failures", f"{len(self_knowledge)} tools bermasalah")
+        table.add_row("Strategies", f"{len(strategies)} strategi tersimpan")
+
+        self._console.print(table)
+
+    async def _show_debug(self) -> None:
+        """Tampilkan laporan kesehatan sistem."""
+        from agent.self_improvement.self_debugging import SelfDebuggingModule
+        debug = SelfDebuggingModule(
+            registry=self._registry,
+            memory_system=self._agent._memory,
+        )
+        report = debug.analyze_system_health()
+
+        self._console.print(Panel(
+            "\n".join(report.identified_weaknesses),
+            title="[bold yellow]System Health Report[/bold yellow]",
+            border_style="yellow",
+        ))
 
     async def _do_stop(self, graceful: bool = True) -> None:
         """Hentikan Agent dan tandai CLI sebagai tidak berjalan (Req 1.7, 1.8)."""

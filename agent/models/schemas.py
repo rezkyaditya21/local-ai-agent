@@ -198,3 +198,29 @@ class InteractionRecord:
     response: str
     tool_calls: list[ToolCall] = field(default_factory=list)
     timestamp: str = ""  # ISO 8601
+
+
+# ---------------------------------------------------------------------------
+# Goal Evaluation
+# ---------------------------------------------------------------------------
+
+
+class GoalStatus:
+    """Status constants for goal evaluation."""
+
+    IN_PROGRESS: str = "in_progress"
+    COMPLETED: str = "completed"
+    FAILED: str = "failed"
+    EXHAUSTED: str = "exhausted"
+
+
+@dataclass
+class GoalEvaluation:
+    """Result of evaluating whether a goal has been achieved."""
+
+    status: str  # GoalStatus constant
+    confidence: float  # 0.0 - 1.0
+    evidence: list[str] = field(default_factory=list)
+    failure_reasons: list[str] = field(default_factory=list)
+    should_replan: bool = False
+    next_steps: list[str] = field(default_factory=list)

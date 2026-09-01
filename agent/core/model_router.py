@@ -39,24 +39,51 @@ class ModelRouter:
         """
         available = self._model_manager.list_models()
         if not available:
-            # Gunakan active model sebagai fallback
             active = self._model_manager.get_active_model()
             return active.name if active else "default"
 
-        # Cari model yang cocok dengan kata kunci kategori
+        active = self._model_manager.get_active_model()
+        active_name = active.name if active else None
+
         category_lower = category.lower()
+
+        # Cari model yang cocok berdasarkan nama
         for cfg in available:
             name_lower = cfg.name.lower()
             if category_lower == "coding" and ("coder" in name_lower or "code" in name_lower):
+                _logger.debug("ModelRouter: '%s' dipilih untuk kategori 'coding'", cfg.name)
                 return cfg.name
             if category_lower == "reasoning" and ("reason" in name_lower or "r1" in name_lower or "70b" in name_lower):
+                _logger.debug("ModelRouter: '%s' dipilih untuk kategori 'reasoning'", cfg.name)
                 return cfg.name
             if category_lower == "fast" and ("3b" in name_lower or "small" in name_lower or "fast" in name_lower):
+                _logger.debug("ModelRouter: '%s' dipilih untuk kategori 'fast'", cfg.name)
+                return cfg.name
+            if category_lower == "evaluator" and ("eval" in name_lower or "judge" in name_lower):
+                _logger.debug("ModelRouter: '%s' dipilih untuk kategori 'evaluator'", cfg.name)
                 return cfg.name
 
         # Fallback ke model aktif
-        active = self._model_manager.get_active_model()
-        return active.name if active else available[0].name
+        if active_name:
+            _logger.debug("ModelRouter: fallback ke model aktif '%s'", active_name)
+            return active_name
+
+        # Fallback ke model pertama yang tersedia
+        _logger.debug("ModelRouter: fallback ke model pertama '%s'", available[0].name)
+        return available[0].name
+
+    def get_model_info(self, model_name: str) -> dict | None:
+        """Ambil informasi model berdasarkan nama."""
+        available = self._model_manager.list_models()
+        for cfg in available:
+            if cfg.name == model_name:
+                return {
+                    "name": cfg.name,
+                    "model_type": cfg.model_type,
+                    "path_or_url": cfg.path_or_url,
+                    "size_bytes": cfg.size_bytes,
+                }
+        return None
 
 
 __all__ = ["ModelRouter"]

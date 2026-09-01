@@ -44,6 +44,24 @@ class CapabilityMap:
         """Periksa apakah kemampuan tertentu tersedia secara aktual."""
         return self.capabilities_status.get(capability_name.lower(), False)
 
+    def to_prompt_context(self) -> str:
+        """Generate teks ringkasan kemampuan untuk disuntikkan ke prompt."""
+        lines = [
+            f"OS: {self.os_platform}",
+            f"Python: {self.python_version}",
+            f"Git: {'Available' if self.has_git else 'Not available'}",
+            f"Pytest: {'Available' if self.has_pytest else 'Not available'}",
+            f"Playwright: {'Available' if self.has_playwright else 'Not available'}",
+            f"Node.js: {'Available' if self.has_node else 'Not available'}",
+            f"Docker: {'Available' if self.has_docker else 'Not available'}",
+            f"Ollama: {'Available' if self.has_ollama else 'Not available'}",
+        ]
+        if self.installed_compilers:
+            lines.append(f"Compilers: {', '.join(self.installed_compilers)}")
+        if self.available_models:
+            lines.append(f"Models: {', '.join(self.available_models)}")
+        return " | ".join(lines)
+
 
 class CapabilityManager:
     """Pengelola dan detektor kemampuan aktual environment."""
@@ -92,6 +110,14 @@ class CapabilityManager:
             installed_compilers=compilers,
             available_models=configured_models or [],
             capabilities_status=status,
+        )
+        _logger.info(
+            "Capabilities: %s | Python %s | Git=%s | Pytest=%s | Tools=%d",
+            self._map.os_platform,
+            self._map.python_version,
+            has_git,
+            has_pytest,
+            sum(1 for v in status.values() if v),
         )
         return self._map
 

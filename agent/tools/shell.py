@@ -135,11 +135,21 @@ class ShellTool:
             `BackgroundProcess`, atau `ToolResult(success=False)` jika gagal.
         """
         operation = params.get("operation")
+        command = params.get("command") or params.get("cmd") or ""
         timeout = int(params.get("timeout", DEFAULT_TIMEOUT_SECONDS))
+
+        if not operation:
+            if command:
+                operation = "run_command"
+            elif params.get("script_path"):
+                operation = "run_script"
+        elif operation not in ("run_command", "run_script", "start_background"):
+            # Jika model memasukkan perintah langsung di operation (misal {"operation": "dir"} atau {"operation": "ls"})
+            command = f"{operation} {command}".strip() if command else operation
+            operation = "run_command"
 
         try:
             if operation == "run_command":
-                command = params.get("command", "")
                 result = await self.run_command(command, timeout=timeout)
                 return ToolResult(success=True, data=result, tool_name=self.name)
 
@@ -150,7 +160,6 @@ class ShellTool:
                 return ToolResult(success=True, data=result, tool_name=self.name)
 
             elif operation == "start_background":
-                command = params.get("command", "")
                 proc = await self.start_background(command)
                 return ToolResult(success=True, data=proc, tool_name=self.name)
 
