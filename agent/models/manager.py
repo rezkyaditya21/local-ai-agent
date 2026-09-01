@@ -617,39 +617,10 @@ class ModelManager:
 
         from datetime import datetime
         current_date_str = datetime.now().strftime("%Y-%m-%d")
+        from agent.core.prompting import TOOL_CALL_INSTRUCTIONS
 
-        # System prompt yang menjelaskan tools yang tersedia
-        system_prompt = f"""Kamu adalah Autonomous Local AI Agent yang berjalan di komputer pengguna. Waktu/Tanggal saat ini adalah: {current_date_str}.
-Kamu memiliki akses penuh ke sistem lokal, terminal, pencarian berkas/kode, eksekusi tes, Git, dan akses internet.
-
-ATURAN UTAMA:
-1. Jawab secara SINGKAT, RINGKAS, PADAT, dan LANGSUNG KE FAKTA/POIN UTAMA.
-2. PERINGATAN PENTING: Gunakan tool HANYA jika user secara eksplisit meminta kamu melakukan sesuatu yang memerlukan tool (baca file, jalankan perintah, cari kode, eksekusi tes, dll).
-3. Untuk sapaan, pertanyaan umum, percakapan biasa — jawab langsung dengan teks biasa. JANGAN gunakan tool.
-4. Ketika menggunakan `web_search`:
-   - Gunakan kata kunci (`query`) yang SPESIFIK dan JELAS.
-   - Sampaikan RINGKASAN FAKTA ATAU ISI INFORMASINYA untuk menjawab pertanyaan pengguna.
-5. Untuk tugas rekayasa perangkat lunak (refactoring/testing/bugfix), lakukan analisa, modifikasi kode, dan verifikasi tes secara otonom.
-
-Untuk menggunakan tool, output JSON block dengan format ini:
-{{"tool": "nama_tool", "params": {{"key": "value"}}}}
-
-Tools yang tersedia:
-- web_search: {{"query": "kata kunci pencarian", "max_results": 5}}
-- filesystem: {{"operation": "read_file"/"write_file"/"create"/"delete"/"move"/"list_dir"/"glob_search", "path": "..."}}
-- shell: {{"operation": "run_command", "command": "perintah shell"}}
-- browser: {{"operation": "fetch_html"/"screenshot", "url": "..."}}
-- database: {{"operation": "connect"/"select"/"execute_dml"/"get_schema", "connection_string": "...", "query": "..."}}
-- http_api: {{"method": "GET"/"POST", "url": "..."}}
-- code_search: {{"operation": "search_symbol"/"search_regex"/"find_files", "query": "..."}}
-- git: {{"operation": "status"/"diff"/"commit"/"log"/"checkpoint"/"rollback"}}
-- test_runner: {{"test_path": "tests", "verbose": false}}
-- python_exec: {{"code": "print('hello')"}}
-- system_inspect: {{"target": "all"/"runtime"/"packages"/"env"}}
-- project_inspect: {{"path": "."}}
-- benchmark: {{"code": "...", "iterations": 3}}
-
-Setelah tool dieksekusi, sampaikan FAKTA/ISI INFORMASI penting secara singkat, tepat, dan relevan."""
+        system_prompt = f"""Waktu/Tanggal saat ini: {current_date_str}.
+{TOOL_CALL_INSTRUCTIONS}"""
 
         # Bangun messages untuk /api/chat
         messages = [{"role": "system", "content": system_prompt}]
@@ -675,7 +646,7 @@ Setelah tool dieksekusi, sampaikan FAKTA/ISI INFORMASI penting secara singkat, t
         }
 
         url = f"{base_url}/api/chat"
-        api_timeout = httpx.Timeout(120.0, connect=10.0)
+        api_timeout = httpx.Timeout(180.0, connect=60.0)
 
         try:
             async with httpx.AsyncClient(timeout=api_timeout) as client:
@@ -702,6 +673,8 @@ Setelah tool dieksekusi, sampaikan FAKTA/ISI INFORMASI penting secara singkat, t
             yield f"[Error: timeout setelah {api_timeout.connect}s connect / {api_timeout.read}s read]"
         except httpx.HTTPStatusError as exc:
             yield f"[Error: HTTP {exc.response.status_code}]"
+        except (asyncio.CancelledError, GeneratorExit):
+            raise
         except Exception as exc:  # noqa: BLE001
             yield f"[Error API: {exc}]"
 
