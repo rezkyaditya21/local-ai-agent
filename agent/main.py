@@ -176,9 +176,10 @@ def create_app(
     _initial_model = model  # simpan untuk digunakan di main()
 
     # ------------------------------------------------------------------ #
-    # 8. ExecutionBudget — dari config [execution_budget]
+    # 8. ExecutionBudget & Config Dict
     # ------------------------------------------------------------------ #
-    budget = ExecutionBudget.from_config(_read_config_dict(resolved_config))
+    parsed_config = _read_config_dict(resolved_config)
+    budget = ExecutionBudget.from_config(parsed_config)
 
     # ------------------------------------------------------------------ #
     # 9. Executor — menjalankan tool calls dengan pemeriksaan keamanan
