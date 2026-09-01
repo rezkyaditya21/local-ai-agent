@@ -61,9 +61,12 @@ from agent.core.confirmation_gate import ConfirmationGate
 from agent.core.credential_vault import CredentialVault
 from agent.core.executor import Executor
 from agent.core.orchestrator import Agent
+from agent.core.scheduler import TaskScheduler
+from agent.gateway.telegram_gateway import TelegramGateway
 from agent.models.manager import ModelManager
 from agent.self_improvement.backup_manager import BackupManager
 from agent.self_improvement.module import SelfImprovementModule
+from agent.skills.manager import SkillManager
 from agent.tools import (
     BenchmarkTool,
     BrowserTool,
@@ -199,6 +202,13 @@ def create_app(
     )
 
     # ------------------------------------------------------------------ #
+    # 10. Skills Manager & Autonomous Skill Creator
+    # ------------------------------------------------------------------ #
+    skills_cfg = parsed_config.get("skills", {})
+    skill_dirs = [Path(d) for d in skills_cfg.get("directories", ["./skills"])]
+    skill_manager = SkillManager(skill_dirs=skill_dirs)
+
+    # ------------------------------------------------------------------ #
     # 11. Agent Orchestrator
     # ------------------------------------------------------------------ #
     agent = Agent(
@@ -208,10 +218,30 @@ def create_app(
         audit_logger=audit_logger,
         blocklist=blocklist,
         budget=budget,
+        skill_manager=skill_manager,
     )
 
     # ------------------------------------------------------------------ #
-    # 11. CLI
+    # 12. Task Scheduler & Background Automations
+    # ------------------------------------------------------------------ #
+    scheduler = TaskScheduler(task_executor=lambda goal: agent.process(goal))
+
+    # ------------------------------------------------------------------ #
+    # 13. Telegram Gateway
+    # ------------------------------------------------------------------ #
+    tg_cfg = parsed_config.get("gateway", {}).get("telegram", {})
+    tg_token = tg_cfg.get("token", "")
+    tg_allowed = tg_cfg.get("allowed_user_ids", [])
+    gateway = None
+    if tg_cfg.get("enabled", False) and tg_token and not tg_token.startswith("YOUR_"):
+        gateway = TelegramGateway(
+            token=tg_token,
+            allowed_user_ids=tg_allowed,
+            agent_processor=agent.process,
+        )
+
+    # ------------------------------------------------------------------ #
+    # 14. CLI
     # ------------------------------------------------------------------ #
     cli_config = CLIConfig(model=model, history_limit=1000)
     cli = CLI(
@@ -220,6 +250,8 @@ def create_app(
         model_manager=model_manager,
         registry=registry,
         self_improvement_module=sim,
+        scheduler=scheduler,
+        gateway=gateway,
     )
 
     return cli, agent
@@ -303,20 +335,26 @@ async def _run_async(cli: "CLI", agent: "Agent", initial_model: str | None) -> N
     """
     loop = asyncio.get_event_loop()
 
+    # ---- start background scheduler & gateway ----
+    scheduler = getattr(cli, "_scheduler", None)
+    if scheduler:
+        scheduler.start()
+
+    gateway = getattr(cli, "_gateway", None)
+    if gateway:
+        gateway.start()
+
     # ---- setup SIGINT (Ctrl+C) ----
     def _sigint_handler() -> None:
         """Handle Ctrl+C: set flag berhenti dan panggil agent.stop()."""
         _logger.info("SIGINT diterima — menghentikan Agent.")
-        # Schedule coroutine stop() di event loop (aman dipanggil dari signal handler)
         asyncio.create_task(_graceful_stop(cli, agent))
 
-    # Daftarkan handler SIGINT hanya di platform POSIX (Unix/macOS)
-    # Di Windows, KeyboardInterrupt di-handle via try/except di cli.run()
     if sys.platform != "win32":
         try:
             loop.add_signal_handler(signal.SIGINT, _sigint_handler)
         except (NotImplementedError, RuntimeError):
-            pass  # Tidak semua platform mendukung add_signal_handler
+            pass
 
     # ---- switch model awal jika diminta (Req 1.4) ----
     if initial_model is not None:
@@ -337,10 +375,13 @@ async def _run_async(cli: "CLI", agent: "Agent", initial_model: str | None) -> N
     try:
         await cli.run()
     except KeyboardInterrupt:
-        # Windows fallback untuk Ctrl+C
         await _graceful_stop(cli, agent)
     finally:
-        # Cleanup signal handler
+        # Cleanup
+        if scheduler:
+            scheduler.stop()
+        if gateway:
+            gateway.stop()
         if sys.platform != "win32":
             try:
                 loop.remove_signal_handler(signal.SIGINT)
@@ -350,9 +391,14 @@ async def _run_async(cli: "CLI", agent: "Agent", initial_model: str | None) -> N
 
 async def _graceful_stop(cli: "CLI", agent: "Agent") -> None:
     """Hentikan Agent dan CLI secara graceful dalam ≤3 detik (Req 1.7, 10.3)."""
-    # Tandai CLI agar loop berhenti
     cli._running = False
-    # Hentikan operasi Agent yang sedang berjalan
+    scheduler = getattr(cli, "_scheduler", None)
+    if scheduler:
+        scheduler.stop()
+    gateway = getattr(cli, "_gateway", None)
+    if gateway:
+        gateway.stop()
+
     try:
         await asyncio.wait_for(agent.stop(), timeout=3.0)
     except asyncio.TimeoutError:

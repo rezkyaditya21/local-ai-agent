@@ -30,3 +30,23 @@ path_or_url = "C:/Users/rezky/Documents/models/qwen2.5-coder-7b-instruct-q4_k_m.
 [model_parameters]
 temperature = 0.7
 context_length = 4096
+
+# ---------------------------------------------------------------------------
+# Hermes-Inspired Enhancements: Skills, Memory FTS, Gateway & Scheduler
+# ---------------------------------------------------------------------------
+[skills]
+enabled = true
+directories = ["./skills"]
+
+[memory]
+fts_enabled = true
+storage_file = "agent_memory.db"
+
+[scheduler]
+enabled = true
+check_interval_seconds = 30
+
+[gateway.telegram]
+enabled = false
+token = "YOUR_TELEGRAM_BOT_TOKEN_HERE"
+allowed_user_ids = []

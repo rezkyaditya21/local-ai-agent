@@ -16,6 +16,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from agent.memory.fts_store import SQLiteFTSStore, SearchResult
+
 _logger = logging.getLogger(__name__)
 
 
@@ -39,9 +41,10 @@ class MemorySystem:
     5. Long-Term Knowledge: fakta, bugfix, dan aturan.
     6. Tool Knowledge: catatan penggunaan tool.
     7. Self Knowledge: kemampuan agent, pola kegagalan tool, strategi sukses, & data debugging.
+    8. FTS5 Index: Full-text search engine untuk cross-session recall.
     """
 
-    def __init__(self, storage_path: Path | None = None) -> None:
+    def __init__(self, storage_path: Path | None = None, db_path: Path | str | None = None) -> None:
         self._storage_path = storage_path or (Path.home() / ".config" / "local-ai-agent" / "memory.json")
         self._working_memory: dict[str, Any] = {}
         self._task_memory: list[dict[str, Any]] = []
@@ -52,6 +55,11 @@ class MemorySystem:
             "successful_strategies": [],
             "debugging_experiences": [],
         }
+
+        # Initialize SQLite FTS5 Store
+        fts_db_path = db_path or (self._storage_path.parent / "agent_memory.db")
+        self._fts = SQLiteFTSStore(db_path=fts_db_path)
+
         self._load_storage()
 
     # ------------------------------------------------------------------
@@ -136,17 +144,38 @@ class MemorySystem:
     # Long-Term Memory
     # ------------------------------------------------------------------
 
-    def add_long_term(self, key: str, content: str, category: str = "fact") -> None:
-        """Tambah entri ke Long-Term Memory dan simpan ke file."""
-        now_iso = datetime.now(timezone.utc).isoformat()
+    def add_long_term_fact(self, key: str, content: str, category: str = "fact") -> None:
+        """Simpan fakta ke Long-Term Memory dan indeks SQLite FTS5."""
         entry = MemoryEntry(
             key=key,
             content=content,
             category=category,
-            created_at=now_iso,
+            created_at=datetime.now(timezone.utc).isoformat(),
         )
         self._long_term_memories[key] = entry
         self._save_storage()
+        try:
+            self._fts.add_fact(key, content, category=category)
+        except Exception as exc:
+            _logger.debug("Gagal menambahkan fakta ke FTS5: %s", exc)
+
+    # Alias untuk kompatibilitas
+    add_long_term = add_long_term_fact
+
+    def record_interaction_fts(self, instruction: str, response: str) -> None:
+        """Indeks interaksi chat ke SQLite FTS5 untuk pencarian masa depan."""
+        try:
+            self._fts.add_interaction(instruction, response)
+        except Exception as exc:
+            _logger.debug("Gagal mengindeks interaksi ke FTS5: %s", exc)
+
+    def search_fts(self, query: str, limit: int = 5, category: str | None = None) -> list[SearchResult]:
+        """Cari riwayat dan fakta menggunakan SQLite FTS5."""
+        try:
+            return self._fts.search(query, limit=limit, category=category)
+        except Exception as exc:
+            _logger.debug("Gagal mencari FTS5: %s", exc)
+            return []
 
     def search_long_term(self, query: str, limit: int = 5) -> list[MemoryEntry]:
         """Cari entri Long-Term Memory yang relevan dengan kata kunci query."""

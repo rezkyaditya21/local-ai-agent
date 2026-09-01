@@ -33,6 +33,8 @@ from agent.core.planner import MultiStepPlanner
 from agent.core.system_inspector import SystemInspector
 from agent.memory.memory_system import MemorySystem
 from agent.models.schemas import InteractionRecord, TaskPlan, ToolCall, ToolResult
+from agent.skills.creator import SkillCreator
+from agent.skills.manager import SkillManager
 
 if TYPE_CHECKING:
     from agent.core.executor import Executor
@@ -79,6 +81,7 @@ class Agent:
         memory_system: MemorySystem (opsional).
         planner: MultiStepPlanner (opsional).
         system_inspector: SystemInspector (opsional).
+        skill_manager: SkillManager (opsional).
     """
 
     def __init__(
@@ -92,6 +95,7 @@ class Agent:
         planner: MultiStepPlanner | None = None,
         system_inspector: SystemInspector | None = None,
         budget: ExecutionBudget | None = None,
+        skill_manager: SkillManager | None = None,
     ) -> None:
         self._model_manager = model_manager
         self._executor = executor
@@ -102,6 +106,8 @@ class Agent:
         self._planner = planner or MultiStepPlanner()
         self._system_inspector = system_inspector or SystemInspector()
         self._budget = budget
+        self.skill_manager = skill_manager or SkillManager()
+        self.skill_creator = SkillCreator(skill_manager=self.skill_manager)
 
         # Build AgentController — pusat execution
         self.controller = AgentController(
@@ -121,6 +127,11 @@ class Agent:
 
         # Task yang sedang berjalan (untuk cancel pada stop())
         self._active_tasks: set[asyncio.Task] = set()
+
+    @property
+    def memory(self) -> MemorySystem:
+        """Akses ke sistem memori agen."""
+        return self._memory
 
     # ------------------------------------------------------------------
     # Public API
@@ -147,9 +158,20 @@ class Agent:
         from agent.core.prompting import build_chat_prompt, summarize_tool_results
         from agent.core.controller import _parse_tool_calls
 
+        # Ambil skill yang relevan secara otonom
+        skills_text = self.skill_manager.format_skills_context(instruction)
+
+        # Cari ingatan lampau yang relevan dari FTS5
+        memory_text = ""
+        fts_hits = self._memory.search_fts(instruction, limit=2)
+        if fts_hits:
+            memory_text = "\n".join(f"- {h.title}: {h.content[:200]}" for h in fts_hits)
+
         current_prompt = build_chat_prompt(
             instruction=instruction,
             tool_catalog=tool_catalog,
+            memory_text=memory_text,
+            skills_text=skills_text,
         )
 
         all_collected_tokens: list[str] = []
@@ -210,8 +232,9 @@ class Agent:
                 "Jika sudah terjawab, jawab langsung dengan teks biasa tanpa JSON tool."
             )
 
-        # Record interaction
+        # Record interaction & FTS index
         final_response = "".join(all_collected_tokens)
+        self._memory.record_interaction_fts(instruction, final_response)
         self._history.append(
             InteractionRecord(
                 instruction=instruction,

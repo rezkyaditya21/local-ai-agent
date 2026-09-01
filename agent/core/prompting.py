@@ -74,14 +74,21 @@ def summarize_tool_results(results: list[ToolResult]) -> str:
     return "\n".join(lines)
 
 
-def build_chat_prompt(instruction: str, tool_catalog: str, memory_text: str = "") -> str:
-    """Prompt satu-siklus (mode /chat) dengan katalog tool."""
+def build_chat_prompt(
+    instruction: str,
+    tool_catalog: str,
+    memory_text: str = "",
+    skills_text: str = "",
+) -> str:
+    """Prompt satu-siklus (mode /chat) dengan katalog tool, memori, dan skill relevan."""
     parts = [
         TOOL_CALL_INSTRUCTIONS,
         "",
         "Katalog tool:",
         tool_catalog or "(tidak ada tool aktif)",
     ]
+    if skills_text.strip():
+        parts.extend(["", skills_text.strip()])
     if memory_text.strip():
         parts.extend(["", "Memori relevan:", memory_text.strip()])
     parts.extend(["", "Instruksi pengguna:", instruction])
@@ -95,12 +102,13 @@ def build_task_prompt(
     iteration: int,
     budget_summary: str,
     memory_text: str = "",
+    skills_text: str = "",
     capability_text: str = "",
     last_results: list[ToolResult] | None = None,
     last_eval: VerificationResult | None = None,
     extra: str = "",
 ) -> str:
-    """Prompt closed-loop: goal, katalog, memori, dan hasil iterasi sebelumnya."""
+    """Prompt closed-loop: goal, katalog, memori, skill, dan hasil iterasi sebelumnya."""
     parts = [
         GOAL_AWARE_INSTRUCTIONS,
         "",
@@ -111,6 +119,8 @@ def build_task_prompt(
         "Katalog tool:",
         tool_catalog or "(tidak ada tool aktif)",
     ]
+    if skills_text.strip():
+        parts.extend(["", skills_text.strip()])
     if capability_text.strip():
         parts.extend(["", "Kemampuan system:", capability_text.strip()])
     if memory_text.strip():

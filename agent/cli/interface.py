@@ -104,6 +104,8 @@ class CLI:
         registry: "ToolRegistry",
         self_improvement_module: "SelfImprovementModule | None" = None,
         console: Console | None = None,
+        scheduler: Any | None = None,
+        gateway: Any | None = None,
     ) -> None:
         self._config = config
         self._agent = agent
@@ -111,6 +113,8 @@ class CLI:
         self._registry = registry
         self._sim = self_improvement_module
         self._console = console or Console(force_terminal=True, legacy_windows=False)
+        self._scheduler = scheduler
+        self._gateway = gateway
         self._running: bool = False
 
     # ------------------------------------------------------------------
@@ -295,8 +299,57 @@ class CLI:
             await self._process_autonomous(goal)
             return True
 
+        # /skill
+        if cmd == "/skill":
+            if len(parts) >= 2 and parts[1].lower() == "list":
+                self._show_skills_list()
+                return True
+            if len(parts) >= 3 and parts[1].lower() == "info":
+                self._show_skill_info(parts[2])
+                return True
+            if len(parts) >= 4 and parts[1].lower() == "create":
+                name = parts[2]
+                instructions = " ".join(parts[3:])
+                self._create_skill(name, instructions)
+                return True
+            self._console.print(
+                "[yellow]Subcommand /skill yang tersedia:[/yellow] list, info <nama>, create <nama> <instruksi>"
+            )
+            return True
+
+        # /cron
+        if cmd == "/cron":
+            if len(parts) >= 2 and parts[1].lower() == "list":
+                self._show_cron_list()
+                return True
+            if len(parts) >= 4 and parts[1].lower() == "add":
+                name = parts[2]
+                try:
+                    interval = int(parts[3])
+                except ValueError:
+                    interval = 3600
+                goal = " ".join(parts[4:]) if len(parts) > 4 else name
+                self._add_cron_task(name, interval, goal)
+                return True
+            if len(parts) >= 3 and parts[1].lower() == "remove":
+                self._remove_cron_task(parts[2])
+                return True
+            self._console.print(
+                "[yellow]Subcommand /cron yang tersedia:[/yellow] list, add <nama> <interval_detik> <goal>, remove <id>"
+            )
+            return True
+
+        # /gateway
+        if cmd == "/gateway":
+            self._show_gateway_status()
+            return True
+
         # /memory
         if cmd == "/memory":
+            if len(parts) >= 3 and parts[1].lower() == "search":
+                query = " ".join(parts[2:])
+                self._search_memory(query)
+                return True
             self._show_memory()
             return True
 
@@ -449,9 +502,17 @@ class CLI:
             ("/tools list", "Tampilkan semua tool beserta status aktif/nonaktif"),
             ("/tools enable <nama>", "Aktifkan tool yang sedang dinonaktifkan"),
             ("/tools disable <nama>", "Nonaktifkan tool tanpa menghapusnya"),
+            ("/skill list", "Lihat semua skill otonom yang terpasang"),
+            ("/skill info <nama>", "Lihat detail petunjuk dan trigger dari suatu skill"),
+            ("/skill create <nama> <instruksi>", "Buat skill baru secara manual"),
+            ("/cron list", "Lihat daftar tugas latar belakang terjadwal"),
+            ("/cron add <nama> <interval_detik> <goal>", "Tambah tugas otonom terjadwal"),
+            ("/cron remove <id>", "Hapus tugas terjadwal"),
+            ("/gateway", "Periksa status gateway Telegram"),
+            ("/memory", "Tampilkan status ringkasan memori agent"),
+            ("/memory search <query>", "Cari riwayat dan pengetahuan via SQLite FTS5"),
             ("/autonomous <goal>", "Jalankan agent dalam mode otonom penuh (closed-loop)"),
             ("/auto <goal>", "Alias untuk /autonomous"),
-            ("/memory", "Tampilkan status memori agent"),
             ("/debug", "Tampilkan laporan kesehatan sistem"),
             ("/rollback", "Pulihkan konfigurasi Agent ke versi backup terakhir"),
         ]
@@ -460,6 +521,132 @@ class CLI:
             table.add_row(cmd, desc)
 
         self._console.print(table)
+
+    def _show_skills_list(self) -> None:
+        """Tampilkan daftar semua skill otonom."""
+        skill_manager = getattr(self._agent, "skill_manager", None)
+        if not skill_manager:
+            self._console.print("[dim]Skill Manager tidak aktif.[/dim]")
+            return
+
+        skills = skill_manager.list_skills()
+        if not skills:
+            self._console.print("[dim]Belum ada skill yang terpasang di folder ./skills/[/dim]")
+            return
+
+        table = Table(title="Daftar Skill Otonom", show_header=True, header_style="bold cyan")
+        table.add_column("Nama Skill", style="bold green")
+        table.add_column("Triggers")
+        table.add_column("Deskripsi")
+
+        for s in skills:
+            trigs = ", ".join(s.triggers) if s.triggers else "-"
+            desc = s.description[:50] + "..." if len(s.description) > 50 else s.description
+            table.add_row(s.name, trigs, desc)
+
+        self._console.print(table)
+
+    def _show_skill_info(self, name: str) -> None:
+        """Tampilkan detail satu skill."""
+        skill_manager = getattr(self._agent, "skill_manager", None)
+        if not skill_manager:
+            return
+        skill = skill_manager.get_skill(name)
+        if not skill:
+            self._console.print(f"[bold red]✗[/bold red] Skill '{name}' tidak ditemukan.")
+            return
+
+        self._console.print(Panel(skill.to_markdown(), title=f"[bold green]Skill: {skill.name}[/bold green]"))
+
+    def _create_skill(self, name: str, instructions: str) -> None:
+        """Buat skill baru."""
+        skill_creator = getattr(self._agent, "skill_creator", None)
+        if not skill_creator:
+            self._console.print("[bold red]✗[/bold red] Skill Creator tidak tersedia.")
+            return
+        skill = skill_creator.create_skill_from_task(
+            task_name=name,
+            goal=instructions,
+            steps=[instructions],
+        )
+        self._console.print(f"[bold green]✓[/bold green] Skill [bold]{skill.name}[/bold] berhasil dibuat dan disimpan di ./skills/")
+
+    def _show_cron_list(self) -> None:
+        """Tampilkan daftar tugas terjadwal."""
+        if not self._scheduler:
+            self._console.print("[dim]Task Scheduler belum diinisialisasi.[/dim]")
+            return
+        tasks = self._scheduler.list_tasks()
+        if not tasks:
+            self._console.print("[dim]Belum ada tugas terjadwal.[/dim]")
+            return
+
+        table = Table(title="Tugas Terjadwal (Cron)", show_header=True, header_style="bold cyan")
+        table.add_column("ID", style="bold yellow")
+        table.add_column("Nama")
+        table.add_column("Interval (dtk)")
+        table.add_column("Status Terakhir")
+        table.add_column("Tujuan / Goal")
+
+        for t in tasks:
+            table.add_row(t.id, t.name, str(t.interval_seconds), t.last_status, t.goal[:40])
+
+        self._console.print(table)
+
+    def _add_cron_task(self, name: str, interval: int, goal: str) -> None:
+        """Tambah tugas terjadwal baru."""
+        if not self._scheduler:
+            self._console.print("[bold red]✗[/bold red] Task Scheduler belum diinisialisasi.")
+            return
+        task = self._scheduler.add_task(name=name, goal=goal, interval_seconds=interval)
+        self._console.print(f"[bold green]✓[/bold green] Tugas terjadwal [bold]{task.name}[/bold] (ID: {task.id}) berhasil ditambahkan (setiap {interval}s).")
+
+    def _remove_cron_task(self, task_id: str) -> None:
+        """Hapus tugas terjadwal."""
+        if not self._scheduler:
+            return
+        if self._scheduler.remove_task(task_id):
+            self._console.print(f"[bold green]✓[/bold green] Tugas {task_id} berhasil dihapus.")
+        else:
+            self._console.print(f"[bold red]✗[/bold red] Tugas {task_id} tidak ditemukan.")
+
+    def _search_memory(self, query: str) -> None:
+        """Cari riwayat dan fakta menggunakan SQLite FTS5."""
+        memory = getattr(self._agent, "_memory", None)
+        if not memory:
+            return
+        results = memory.search_fts(query, limit=5)
+        if not results:
+            self._console.print(f"[dim]Tidak ditemukan entri yang cocok dengan '{query}' di FTS5.[/dim]")
+            return
+
+        table = Table(title=f"Hasil Pencarian Memori: '{query}'", show_header=True, header_style="bold cyan")
+        table.add_column("Kategori", style="bold magenta")
+        table.add_column("Judul / Key", style="bold")
+        table.add_column("Isi Konten")
+
+        for r in results:
+            content_preview = r.content[:80] + "..." if len(r.content) > 80 else r.content
+            table.add_row(r.category, r.title, content_preview)
+
+        self._console.print(table)
+
+    def _show_gateway_status(self) -> None:
+        """Tampilkan status gateway pesan."""
+        if not self._gateway:
+            self._console.print(Panel(
+                "Telegram Gateway: [bold red]Nonaktif / Belum Dikonfigurasi[/bold red]\n"
+                "Untuk mengaktifkan, tambahkan token bot di [bold]config.toml[/bold]:\n"
+                "[gateway.telegram]\nenabled = true\ntoken = \"BOT_TOKEN_ANDA\"",
+                title="[bold cyan]Status Gateway[/bold cyan]",
+            ))
+            return
+        status_str = "[bold green]Aktif & Polling[/bold green]" if self._gateway._running else "[yellow]Dikonfigurasi (Standby)[/yellow]"
+        self._console.print(Panel(
+            f"Telegram Gateway: {status_str}\n"
+            f"Allowed Users Whitelist: {len(self._gateway._allowed_user_ids)} ID terdaftar",
+            title="[bold cyan]Status Gateway[/bold cyan]",
+        ))
 
     def _show_model_list(self) -> None:
         """Tampilkan daftar model terdaftar (Req 7.3)."""
