@@ -55,6 +55,8 @@ class LocalModelBackend:
         p = get_active_model_path()
         if "1.5b" in p.name.lower():
             return "Qwen 2.5 Coder 1.5B (Fast / Active)"
+        elif "14b" in p.name.lower():
+            return "Qwen 2.5 Coder 14B (Super Smart / Active)"
         elif "7b" in p.name.lower():
             return "Qwen 2.5 Coder 7B (Standard / Active)"
         return p.stem
@@ -66,7 +68,12 @@ class LocalModelBackend:
                 "Saya adalah Autonomous AI Agent Platform lokal berbasis hybrid Rust (Runtime) dan Python (AI Engine). "
                 "Saya dapat mengeksekusi tugas otonom, membaca/menulis file, mengecek sistem, dan menjalankan perintah lokal secara aman."
             )
-        model_tag = "Qwen 2.5 Coder 1.5B (Mode Kilat)" if "1.5b" in str(self._loaded_path) else "Qwen 2.5 Coder 7B"
+        if "1.5b" in str(self._loaded_path).lower():
+            model_tag = "Qwen 2.5 Coder 1.5B (Mode Kilat)"
+        elif "14b" in str(self._loaded_path).lower():
+            model_tag = "Qwen 2.5 Coder 14B (Mode Super Pintar)"
+        else:
+            model_tag = "Qwen 2.5 Coder 7B (Mode Standar)"
         
         # Bangun prompt dengan riwayat obrolan agar nyambung
         prompt = (
