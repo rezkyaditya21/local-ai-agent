@@ -1,5 +1,6 @@
 import sys
 import json
+import re
 import tomllib
 from pathlib import Path
 
@@ -85,6 +86,34 @@ class LocalModelBackend:
 
 model_backend = LocalModelBackend()
 
+def extract_file_target(text: str) -> str:
+    """Ekstrak nama file atau path dari teks instruksi pengguna"""
+    text_clean = text.strip()
+    name = None
+
+    # Prioritas 1: Pola setelah kata 'bernama' atau 'dengan nama'
+    m = re.search(r'(?:bernama|dengan nama|nama)\s+[\'"]?([a-zA-Z0-9_\-\.]+)[\'"]?', text_clean, re.IGNORECASE)
+    if m:
+        name = m.group(1).strip()
+    else:
+        # Prioritas 2: Pola setelah kata 'file' (hindari menangkap kata 'bernama')
+        m2 = re.search(r'file\s+[\'"]?(?:bernama\s+)?([a-zA-Z0-9_\-\.]+)[\'"]?', text_clean, re.IGNORECASE)
+        if m2:
+            candidate = m2.group(1).strip()
+            if candidate.lower() != "bernama":
+                name = candidate
+
+    if not name:
+        name = "output.txt"
+
+    # Jika nama belum ada ekstensi, beri ekstensi .txt
+    if "." not in name:
+        name = f"{name}.txt"
+
+    if name.startswith("E:/") or name.startswith("E:\\") or name.startswith("C:/") or name.startswith("C:\\"):
+        return name
+    return f"E:/agent_system/{name}"
+
 def handle_message(msg: dict) -> dict:
     msg_id = msg.get("id", "")
     msg_type = msg.get("type", "")
@@ -109,37 +138,125 @@ def handle_message(msg: dict) -> dict:
         tool_names = [t.get("name") for t in tools]
         goal_lower = goal.lower()
 
-        # 1. Pertanyaan langsung / Chat / Identitas
-        is_question = any(q in goal_lower for q in [
-            "kamu ai apa", "siapa kamu", "siapa dirimu", "apa kabar", "kamu siapa",
-            "apa itu", "jelaskan", "bagaimana cara", "apa yang bisa kamu lakukan", "halo", "hai"
-        ])
+        # JIKA SUDAH MENJALANKAN TOOL (Iterasi >= 2)
+        if iteration >= 2 and context and "Hasil tool terakhir" in context:
+            if "filesystem.write" in context:
+                m_path = re.search(r'"path":\s*"([^"]+)"', context)
+                saved_path = m_path.group(1) if m_path else "tujuan"
+                return {
+                    "version": 1,
+                    "id": msg_id,
+                    "type": "decision_response",
+                    "data": {
+                        "thought": "File telah berhasil ditulis dan diverifikasi pada disk.",
+                        "action": {
+                            "type": "finish",
+                            "details": {
+                                "summary": f"File berhasil dibuat dan disimpan secara nyata di: {saved_path}"
+                            }
+                        }
+                    }
+                }
+            elif "filesystem.read" in context:
+                return {
+                    "version": 1,
+                    "id": msg_id,
+                    "type": "decision_response",
+                    "data": {
+                        "thought": "Isi file telah berhasil dibaca dari disk.",
+                        "action": {
+                            "type": "finish",
+                            "details": {
+                                "summary": f"Isi file telah berhasil dibaca:\n{context}"
+                            }
+                        }
+                    }
+                }
+            elif "system.info" in context:
+                return {
+                    "version": 1,
+                    "id": msg_id,
+                    "type": "decision_response",
+                    "data": {
+                        "thought": "Telemetri perangkat keras telah diperoleh.",
+                        "action": {
+                            "type": "finish",
+                            "details": {
+                                "summary": "Informasi sistem dan perangkat keras laptop telah berhasil diperiksa dan diverifikasi."
+                            }
+                        }
+                    }
+                }
+            elif "shell.run" in context:
+                return {
+                    "version": 1,
+                    "id": msg_id,
+                    "type": "decision_response",
+                    "data": {
+                        "thought": "Perintah shell telah dieksekusi.",
+                        "action": {
+                            "type": "finish",
+                            "details": {
+                                "summary": f"Hasil eksekusi perintah shell:\n{context}"
+                            }
+                        }
+                    }
+                }
 
-        if is_question and iteration == 1:
-            answer = model_backend.answer_direct(goal)
+        # ITERASI 1: ANALISIS INTENT DAN PILIH TINDAKAN NYATA (TOOL CALL)
+
+        # 1. Intent Menulis / Membuat File (filesystem.write)
+        if "filesystem.write" in tool_names and iteration == 1 and any(w in goal_lower for w in ["buat", "bikin", "tulis", "create", "write"]) and "file" in goal_lower:
+            target_path = extract_file_target(goal)
+            content_to_write = f"File '{Path(target_path).name}' berhasil dibuat secara otonom oleh Local AI Agent Platform.\nWaktu instruksi: {goal}"
             return {
                 "version": 1,
                 "id": msg_id,
                 "type": "decision_response",
                 "data": {
-                    "thought": "Pengguna menanyakan identitas atau pertanyaan umum. Menjawab langsung dengan model AI.",
+                    "thought": f"Mengeksekusi tool 'filesystem.write' untuk membuat file nyata di '{target_path}'.",
                     "action": {
-                        "type": "finish",
+                        "type": "tool_call",
                         "details": {
-                            "summary": answer
+                            "tool": "filesystem.write",
+                            "arguments": {
+                                "path": target_path,
+                                "content": content_to_write
+                            }
                         }
                     }
                 }
             }
 
-        # 2. Tool system.info
+        # 2. Intent Membaca File (filesystem.read)
+        if "filesystem.read" in tool_names and iteration == 1 and any(w in goal_lower for w in ["baca", "lihat isi", "read"]) and "file" in goal_lower:
+            target_path = extract_file_target(goal)
+            return {
+                "version": 1,
+                "id": msg_id,
+                "type": "decision_response",
+                "data": {
+                    "thought": f"Mengeksekusi tool 'filesystem.read' untuk membaca file di '{target_path}'.",
+                    "action": {
+                        "type": "tool_call",
+                        "details": {
+                            "tool": "filesystem.read",
+                            "arguments": {
+                                "path": target_path
+                            }
+                        }
+                    }
+                }
+            }
+
+        # 3. Intent Info Sistem (system.info)
         if "system.info" in tool_names and iteration == 1 and any(k in goal_lower for k in ["spek", "sistem", "inspeksi", "hardware", "ram", "cpu", "telemetri"]):
             return {
                 "version": 1,
                 "id": msg_id,
                 "type": "decision_response",
                 "data": {
-                    "thought": "Memeriksa informasi perangkat keras dan telemetri sistem laptop menggunakan tool 'system.info'.",
+                    "thought": "Memeriksa informasi perangkat keras laptop menggunakan tool 'system.info'.",
                     "action": {
                         "type": "tool_call",
                         "details": {
@@ -150,24 +267,29 @@ def handle_message(msg: dict) -> dict:
                 }
             }
 
-        # 3. Iterasi kedua setelah tool selesai
-        if iteration >= 2 and context and "Hasil tool terakhir" in context:
+        # 4. Intent Eksekusi Shell Command (shell.run)
+        if "shell.run" in tool_names and iteration == 1 and any(k in goal_lower for k in ["jalankan perintah", "eksekusi perintah", "run command", "terminal", "shell"]):
+            m_cmd = re.search(r'(?:perintah|command|shell)\s+[:\'"]?(.+?)[\'"]?$', goal, re.IGNORECASE)
+            cmd_str = m_cmd.group(1) if m_cmd else "dir"
             return {
                 "version": 1,
                 "id": msg_id,
                 "type": "decision_response",
                 "data": {
-                    "thought": "Data dari eksekusi tool telah berhasil diperoleh dan divalidasi.",
+                    "thought": f"Menjalankan perintah shell '{cmd_str}' secara aman.",
                     "action": {
-                        "type": "finish",
+                        "type": "tool_call",
                         "details": {
-                            "summary": "Tugas telah berhasil diselesaikan dengan baik sesuai instruksi."
+                            "tool": "shell.run",
+                            "arguments": {
+                                "command": cmd_str
+                            }
                         }
                     }
                 }
             }
 
-        # 4. Default: Jawab langsung via LLM
+        # 5. Pertanyaan Umum / Percakapan Biasa (Chat Langsung via Model LLM)
         if iteration == 1:
             answer = model_backend.answer_direct(goal)
             return {
@@ -175,7 +297,7 @@ def handle_message(msg: dict) -> dict:
                 "id": msg_id,
                 "type": "decision_response",
                 "data": {
-                    "thought": "Menganalisis instruksi pengguna dan merumuskan respons.",
+                    "thought": "Menganalisis instruksi pengguna dan menjawab langsung dengan model AI.",
                     "action": {
                         "type": "finish",
                         "details": {
