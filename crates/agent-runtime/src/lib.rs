@@ -4,7 +4,7 @@ use agent_core::{StepRecord, Task, TaskStatus};
 use agent_execution::ExecutionPolicy;
 use agent_protocol::{AgentAction, MessagePayload, ToolObservation};
 use agent_state::{State, StateMachine};
-use agent_tools::builtin::{FileReadTool, FileWriteTool, ShellRunTool, SystemInfoTool};
+use agent_tools::builtin::{FileListTool, FileReadTool, FileWriteTool, ShellRunTool, SystemInfoTool};
 use agent_tools::registry::ToolRegistry;
 use anyhow::{anyhow, Result};
 use chrono::Utc;
@@ -23,6 +23,7 @@ impl AgentRuntime {
         registry.register(SystemInfoTool);
         registry.register(FileReadTool);
         registry.register(FileWriteTool);
+        registry.register(FileListTool);
         registry.register(ShellRunTool);
 
         Self {

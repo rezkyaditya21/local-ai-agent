@@ -150,11 +150,12 @@ model_backend = LocalModelBackend()
 def extract_file_target(text: str) -> str:
     text_clean = text.strip()
     name = None
-    m = re.search(r'(?:bernama|dengan nama|nama)\s+["\']?([a-zA-Z0-9_\-\.]+)["\']?', text_clean, re.IGNORECASE)
+    # Mendukung full path (E:/folder/file.txt) maupun nama lokal (file.txt)
+    m = re.search(r"(?:bernama|dengan nama|nama)\s+['\"]?([a-zA-Z]:[\\/][a-zA-Z0-9_\-\.\\/]+|[a-zA-Z0-9_\-\.]+)['\"]?", text_clean, re.IGNORECASE)
     if m:
         name = m.group(1).strip()
     else:
-        m2 = re.search(r'file\s+["\']?(?:bernama\s+)?([a-zA-Z0-9_\-\.]+)["\']?', text_clean, re.IGNORECASE)
+        m2 = re.search(r"file\s+['\"]?(?:bernama\s+)?([a-zA-Z]:[\\/][a-zA-Z0-9_\-\.\\/]+|[a-zA-Z0-9_\-\.]+)['\"]?", text_clean, re.IGNORECASE)
         if m2:
             candidate = m2.group(1).strip()
             if candidate.lower() != "bernama":
@@ -163,7 +164,8 @@ def extract_file_target(text: str) -> str:
     if not name:
         name = "output.txt"
 
-    if "." not in name:
+    base_name = Path(name).name
+    if "." not in base_name:
         name = f"{name}.txt"
 
     if name.startswith("E:/") or name.startswith("E:\\") or name.startswith("C:/") or name.startswith("C:\\"):
@@ -187,8 +189,17 @@ def clean_tool_context(context: str) -> str:
                 return "(Perintah berhasil dieksekusi tanpa output)"
             elif "content" in data:
                 return data["content"].strip()
+            elif "items" in data:
+                path_info = data.get("path", ".")
+                items = data.get("items", [])
+                lines = [f"Isi direktori '{path_info}' ({len(items)} item):"]
+                for it in items[:25]:
+                    prefix = "[FOLDER]" if it.get("is_directory") else "[FILE]"
+                    size_kb = round(it.get("size_bytes", 0) / 1024, 1)
+                    lines.append(f"  {prefix} {it.get('name')} ({size_kb} KB)" if not it.get("is_directory") else f"  {prefix} {it.get('name')}")
+                return "\n".join(lines)
             elif "os" in data:
-                return f"OS: {data.get('os')}, CPU Cores: {data.get('cpu_cores')}, RAM: {data.get('memory_mb')} MB"
+                return f"OS: {data.get('os')}, CPU Cores: {data.get('cpu_cores')}, Total RAM: {data.get('total_ram_mb')} MB, Used: {data.get('used_ram_mb')} MB, Free: {data.get('free_ram_mb')} MB"
         except Exception:
             pass
     return context
@@ -248,6 +259,21 @@ def handle_message(msg: dict) -> dict:
                             "type": "finish",
                             "details": {
                                 "summary": f"Berikut isi filenya:\n\n{clean_output}"
+                            }
+                        }
+                    }
+                }
+            elif "filesystem.list" in context:
+                return {
+                    "version": 1,
+                    "id": msg_id,
+                    "type": "decision_response",
+                    "data": {
+                        "thought": "Daftar berkas dalam direktori telah diperoleh.",
+                        "action": {
+                            "type": "finish",
+                            "details": {
+                                "summary": f"Berikut daftar isi direktori:\n\n{clean_output}"
                             }
                         }
                     }
@@ -320,6 +346,27 @@ def handle_message(msg: dict) -> dict:
                             "tool": "filesystem.read",
                             "arguments": {
                                 "path": target_path
+                            }
+                        }
+                    }
+                }
+            }
+
+        if "filesystem.list" in tool_names and iteration == 1 and any(w in goal_lower for w in ["lihat isi", "cek isi", "daftar file", "ada file apa", "list file", "isi direktori", "isi folder"]):
+            m_path = re.search(r"(?:di|dalam|folder|direktori)\s+['\"]?([a-zA-Z]:[\\/][a-zA-Z0-9_\-\.\\/]+|[a-zA-Z0-9_\-\.]+)['\"]?", goal, re.IGNORECASE)
+            t_path = m_path.group(1).strip() if m_path else "."
+            return {
+                "version": 1,
+                "id": msg_id,
+                "type": "decision_response",
+                "data": {
+                    "thought": f"Mengecek daftar file dan subfolder di direktori '{t_path}'.",
+                    "action": {
+                        "type": "tool_call",
+                        "details": {
+                            "tool": "filesystem.list",
+                            "arguments": {
+                                "path": t_path
                             }
                         }
                     }

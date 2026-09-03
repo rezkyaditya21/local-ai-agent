@@ -139,7 +139,63 @@ impl Tool for FileWriteTool {
     }
 }
 
-// 4. Shell Run Tool
+// 4. Filesystem List Tool
+pub struct FileListTool;
+
+#[async_trait]
+impl Tool for FileListTool {
+    fn name(&self) -> &'static str {
+        "filesystem.list"
+    }
+
+    fn description(&self) -> &'static str {
+        "Melihat daftar berkas dan subfolder dalam direktori."
+    }
+
+    fn input_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "path": { "type": "string", "description": "Lokasi direktori (opsional, default: '.')" }
+            }
+        })
+    }
+
+    async fn execute(&self, args: Value) -> Result<Value, ToolError> {
+        let path_str = args.get("path")
+            .and_then(|v| v.as_str())
+            .unwrap_or(".");
+
+        let path = Path::new(path_str);
+        if !path.exists() {
+            return Err(ToolError::ExecutionFailed(format!("Direktori '{}' tidak ditemukan", path_str)));
+        }
+
+        let mut read_dir = tokio::fs::read_dir(path)
+            .await
+            .map_err(|e| ToolError::ExecutionFailed(e.to_string()))?;
+
+        let mut entries = Vec::new();
+        while let Ok(Some(entry)) = read_dir.next_entry().await {
+            let file_name = entry.file_name().to_string_lossy().to_string();
+            let is_dir = entry.file_type().await.map(|t| t.is_dir()).unwrap_or(false);
+            let size = if is_dir { 0 } else { entry.metadata().await.map(|m| m.len()).unwrap_or(0) };
+            entries.push(json!({
+                "name": file_name,
+                "is_directory": is_dir,
+                "size_bytes": size
+            }));
+        }
+
+        Ok(json!({
+            "path": path_str,
+            "total_items": entries.len(),
+            "items": entries
+        }))
+    }
+}
+
+// 5. Shell Run Tool
 pub struct ShellRunTool;
 
 #[async_trait]

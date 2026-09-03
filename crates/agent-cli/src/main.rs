@@ -36,8 +36,10 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    init_observability();
     let cli = Cli::parse();
+    // In chat mode, quiet telemetry so conversation UI is 100% clean like ChatGPT!
+    let quiet = matches!(cli.command, Commands::Chat);
+    init_observability(quiet);
 
     let python_bin = "python";
     let worker_script = "E:\\agent_system\\python\\ai_engine\\worker.py";
