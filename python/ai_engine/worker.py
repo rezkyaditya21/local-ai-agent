@@ -94,7 +94,7 @@ class LocalModelBackend:
         try:
             stream = self._llm(
                 prompt,
-                max_tokens=150,
+                max_tokens=512,
                 temperature=0.3,
                 stop=["<|im_end|>", "<|endoftext|>"],
                 stream=True,
