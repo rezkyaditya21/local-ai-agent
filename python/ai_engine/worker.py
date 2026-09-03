@@ -1,3 +1,4 @@
+from web_engine import search_web, fetch_url
 import sys
 import json
 import re
@@ -80,16 +81,40 @@ class LocalModelBackend:
         else:
             model_tag = "Qwen 2.5 Coder 7B (Mode Standar)"
 
+        web_info = ""
+        q_lower = query.lower()
+        
+        # Cek jika pengguna memberikan link / URL
+        m_url = re.search(r'https?://[^\s]+', query)
+        if m_url:
+            url_target = m_url.group(0)
+            fetched = fetch_url(url_target)
+            web_info = f"\n\n[DATA DARI WEB {url_target}]:\n{fetched}\n"
+        elif any(k in q_lower for k in ["cari di internet", "cari internet", "search internet", "cek internet", "berita", "terkini", "terbaru", "siapa presiden"]) or (q_lower.startswith("cari ") and len(query.split()) > 1):
+            # Bersihkan query pencarian
+            clean_q = re.sub(r'(?:tolong\s+)?(?:cari(?:kan)?\s+(?:di\s+)?internet|search\s+internet|cek\s+internet|cari(?:kan)?)\s*', '', query, flags=re.IGNORECASE).strip()
+            if not clean_q:
+                clean_q = query
+            results = search_web(clean_q)
+            web_info = f"\n\n[HASIL PENCARIAN INTERNET TERKINI]:\n{results}\n"
+
+        user_turn_content = query
+        if web_info:
+            user_turn_content = (
+                f"[SUMBER DATA INTERNET REAL-TIME]:\n{web_info}\n\n"
+                f"[INSTRUKSI]: Berdasarkan data internet di atas, jawab pertanyaan ini secara akurat dan to-the-point: {query}"
+            )
+
         prompt = (
             f"<|im_start|>system\n"
             f"Kamu adalah Asisten AI Lokal otonom di laptop pengguna (Drive E:), ditenagai oleh model {model_tag}. "
-            f"Kamu memiliki kendali otonom nyata: dapat membuat file, membaca file, mengecek sistem, dan menjalankan perintah terminal. "
-            f"Jawab selalu dalam Bahasa Indonesia yang ramah, sopan, dan solutif. Jika pertanyaan pengguna singkat atau menggantung, sambut dengan hangat dan tanyakan apa yang ingin dibantu.<|im_end|>\n"
+            f"Kamu memiliki kendali otonom nyata: dapat membuat file, membaca file, mengecek sistem, menjalankan terminal, dan mencari data langsung dari internet. "
+            f"Jawab selalu dalam Bahasa Indonesia yang ramah, sopan, dan solutif berdasarkan fakta nyata yang diberikan.<|im_end|>\n"
         )
         for h in self.history[-3:]:
             prompt += f"<|im_start|>{h['role']}\n{h['content']}<|im_end|>\n"
 
-        prompt += f"<|im_start|>user\n{query}<|im_end|>\n<|im_start|>assistant\n"
+        prompt += f"<|im_start|>user\n{user_turn_content}<|im_end|>\n<|im_start|>assistant\n"
 
         try:
             stream = self._llm(
