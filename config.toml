@@ -1,44 +1,17 @@
-default_model = "qwen7b"
-tool_directories = []
-sandbox_enabled = false
-shell_timeout_seconds = 30
-log_path = "audit.log"
-max_consecutive_actions = 10
+[platform]
+name = "Autonomous Agent Platform"
+version = "0.1.0"
+workspace_root = "E:/agent_system"
 
-[execution_budget]
+[runtime]
 max_iterations = 15
-max_tool_calls = 50
-max_runtime_seconds = 300
-max_retries = 3
+execution_timeout_seconds = 300
 
-# ---------------------------------------------------------------------------
-# Model GGUF Qwen 2.5 Coder 7B (Lokal)
-# ---------------------------------------------------------------------------
-[[models]]
-name = "qwen7b"
-model_type = "gguf"
-path_or_url = "C:/Users/rezky/Documents/models/qwen2.5-coder-7b-instruct-q4_k_m.gguf"
+[python]
+executable = "python"
+worker_script = "E:/agent_system/python/ai_engine/worker.py"
 
-[model_parameters]
-temperature = 0.7
-context_length = 4096
-
-# ---------------------------------------------------------------------------
-# Hermes-Inspired Enhancements: Skills, Memory FTS, Gateway & Scheduler
-# ---------------------------------------------------------------------------
-[skills]
-enabled = true
-directories = ["./skills"]
-
-[memory]
-fts_enabled = true
-storage_file = "agent_memory.db"
-
-[scheduler]
-enabled = true
-check_interval_seconds = 30
-
-[gateway.telegram]
-enabled = false
-token = "YOUR_TELEGRAM_BOT_TOKEN_HERE"
-allowed_user_ids = []
+[model]
+model_path = "E:/agent_system/models/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf"
+context_length = 2048
+temperature = 0.2

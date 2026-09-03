@@ -1,65 +1,87 @@
 import sys
 import json
+import tomllib
 from pathlib import Path
 
-MODEL_PATH = Path("C:/Users/rezky/Documents/models/qwen2.5-coder-7b-instruct-q4_k_m.gguf")
+CONFIG_PATH = Path("E:/agent_system/config.toml")
+
+def get_active_model_path() -> Path:
+    if CONFIG_PATH.exists():
+        try:
+            with open(CONFIG_PATH, "rb") as f:
+                cfg = tomllib.load(f)
+                p = cfg.get("model", {}).get("model_path")
+                if p and Path(p).exists():
+                    return Path(p)
+        except Exception:
+            pass
+    m_1_5b = Path("E:/agent_system/models/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf")
+    if m_1_5b.exists():
+        return m_1_5b
+    return Path("C:/Users/rezky/Documents/models/qwen2.5-coder-7b-instruct-q4_k_m.gguf")
 
 class LocalModelBackend:
     def __init__(self):
         self._llm = None
-        self._loaded = False
+        self._loaded_path = None
 
     def load(self):
-        if self._loaded:
+        current_path = get_active_model_path()
+        if self._llm is not None and self._loaded_path == current_path:
             return
-        if MODEL_PATH.exists():
+
+        if current_path.exists():
             try:
                 import llama_cpp
                 self._llm = llama_cpp.Llama(
-                    model_path=str(MODEL_PATH),
+                    model_path=str(current_path),
                     n_ctx=1024,
                     n_threads=4,
                     n_batch=512,
                     verbose=False,
                 )
-                self._loaded = True
-            except Exception as exc:
+                self._loaded_path = current_path
+            except Exception:
                 self._llm = None
         else:
             self._llm = None
 
     def is_ready(self) -> bool:
-        return self._loaded and self._llm is not None
+        return self._llm is not None
+
+    def get_model_name(self) -> str:
+        p = get_active_model_path()
+        if "1.5b" in p.name.lower():
+            return "Qwen 2.5 Coder 1.5B (Fast / Active)"
+        elif "7b" in p.name.lower():
+            return "Qwen 2.5 Coder 7B (Standard / Active)"
+        return p.stem
 
     def answer_direct(self, query: str) -> str:
         self.load()
         if not self.is_ready():
             return (
-                "Saya adalah Autonomous AI Agent Platform lokal berbasis hybrid Rust (Runtime) dan Python (AI Engine), "
-                "ditenagai oleh model Qwen 2.5 Coder 7B. Saya dapat mengeksekusi tugas otonom, membaca/menulis file, "
-                "mengecek telemetri sistem, dan menjalankan perintah di lingkungan laptop Anda secara aman."
+                "Saya adalah Autonomous AI Agent Platform lokal berbasis hybrid Rust (Runtime) dan Python (AI Engine). "
+                "Saya dapat mengeksekusi tugas otonom, membaca/menulis file, mengecek sistem, dan menjalankan perintah lokal secara aman."
             )
+        model_tag = "Qwen 2.5 Coder 1.5B (Mode Kilat)" if "1.5b" in str(self._loaded_path) else "Qwen 2.5 Coder 7B"
         prompt = (
             f"<|im_start|>system\n"
             f"Kamu adalah Local Autonomous AI Agent Platform yang berjalan mandiri di laptop pengguna (Drive E:), "
-            f"menggunakan kombinasi Rust Runtime untuk eksekusi aman dan Python + Qwen 2.5 Coder untuk penalaran AI. "
-            f"Jawab dengan ramah, lugas, dan jelas dalam Bahasa Indonesia.<|im_end|>\n"
+            f"ditenagai oleh model {model_tag}. Jawab pertanyaan pengguna dengan ramah, lugas, dan jelas dalam Bahasa Indonesia.<|im_end|>\n"
             f"<|im_start|>user\n{query}<|im_end|>\n"
             f"<|im_start|>assistant\n"
         )
         try:
             output = self._llm(
                 prompt,
-                max_tokens=180,
+                max_tokens=150,
                 temperature=0.3,
                 stop=["<|im_end|>", "<|endoftext|>"],
             )
             return output["choices"][0]["text"].strip()
         except Exception:
-            return (
-                "Saya adalah Local Autonomous AI Agent Platform berbasis hybrid Rust dan Python, "
-                "ditenagai oleh model Qwen 2.5 Coder 7B lokal di laptop Anda."
-            )
+            return "Saya adalah Autonomous AI Agent Platform lokal yang siap membantu Anda mengeksekusi tugas di laptop ini."
 
 model_backend = LocalModelBackend()
 
@@ -69,14 +91,13 @@ def handle_message(msg: dict) -> dict:
     data = msg.get("data", {})
 
     if msg_type == "ping":
-        model_name = "qwen2.5-coder-7b (ready)" if MODEL_PATH.exists() else "none"
         return {
             "version": 1,
             "id": msg_id,
             "type": "pong",
             "data": {
                 "status": "ready",
-                "model": model_name
+                "model": model_backend.get_model_name()
             }
         }
 
@@ -86,13 +107,12 @@ def handle_message(msg: dict) -> dict:
         context = data.get("context", "")
         tools = data.get("available_tools", [])
         tool_names = [t.get("name") for t in tools]
-
         goal_lower = goal.lower()
 
-        # 1. Pertanyaan langsung / Chat / Identitas (tanpa perlu tool file/shell)
+        # 1. Pertanyaan langsung / Chat / Identitas
         is_question = any(q in goal_lower for q in [
             "kamu ai apa", "siapa kamu", "siapa dirimu", "apa kabar", "kamu siapa",
-            "apa itu", "jelaskan", "bagaimana cara", "apa yang bisa kamu lakukan"
+            "apa itu", "jelaskan", "bagaimana cara", "apa yang bisa kamu lakukan", "halo", "hai"
         ])
 
         if is_question and iteration == 1:
@@ -102,7 +122,7 @@ def handle_message(msg: dict) -> dict:
                 "id": msg_id,
                 "type": "decision_response",
                 "data": {
-                    "thought": "Pengguna menanyakan identitas atau pertanyaan umum. Saya akan menjawabnya langsung menggunakan model AI.",
+                    "thought": "Pengguna menanyakan identitas atau pertanyaan umum. Menjawab langsung dengan model AI.",
                     "action": {
                         "type": "finish",
                         "details": {
@@ -119,7 +139,7 @@ def handle_message(msg: dict) -> dict:
                 "id": msg_id,
                 "type": "decision_response",
                 "data": {
-                    "thought": "Saya perlu memeriksa informasi perangkat keras dan telemetri sistem laptop menggunakan tool 'system.info'.",
+                    "thought": "Memeriksa informasi perangkat keras dan telemetri sistem laptop menggunakan tool 'system.info'.",
                     "action": {
                         "type": "tool_call",
                         "details": {
@@ -147,7 +167,7 @@ def handle_message(msg: dict) -> dict:
                 }
             }
 
-        # 4. Default: Jawab langsung via LLM jika belum cocok
+        # 4. Default: Jawab langsung via LLM
         if iteration == 1:
             answer = model_backend.answer_direct(goal)
             return {
@@ -165,7 +185,6 @@ def handle_message(msg: dict) -> dict:
                 }
             }
 
-        # Selesai
         return {
             "version": 1,
             "id": msg_id,
