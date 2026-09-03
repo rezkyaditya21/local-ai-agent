@@ -34,7 +34,6 @@ class CapabilityMap:
     has_node: bool
     has_npm: bool
     has_docker: bool
-    has_ollama: bool
     installed_compilers: list[str] = field(default_factory=list)
     available_models: list[str] = field(default_factory=list)
     environment_variables: dict[str, str] = field(default_factory=dict)
@@ -54,7 +53,6 @@ class CapabilityMap:
             f"Playwright: {'Available' if self.has_playwright else 'Not available'}",
             f"Node.js: {'Available' if self.has_node else 'Not available'}",
             f"Docker: {'Available' if self.has_docker else 'Not available'}",
-            f"Ollama: {'Available' if self.has_ollama else 'Not available'}",
         ]
         if self.installed_compilers:
             lines.append(f"Compilers: {', '.join(self.installed_compilers)}")
@@ -77,7 +75,6 @@ class CapabilityManager:
         has_node = shutil.which("node") is not None
         has_npm = shutil.which("npm") is not None
         has_docker = shutil.which("docker") is not None
-        has_ollama = shutil.which("ollama") is not None
 
         compilers = []
         for comp in ["gcc", "g++", "clang", "cl", "rustc", "go"]:
@@ -91,7 +88,6 @@ class CapabilityManager:
             "node": has_node,
             "npm": has_npm,
             "docker": has_docker,
-            "ollama": has_ollama,
             "python": True,
             "filesystem": True,
             "shell": True,
@@ -106,7 +102,6 @@ class CapabilityManager:
             has_node=has_node,
             has_npm=has_npm,
             has_docker=has_docker,
-            has_ollama=has_ollama,
             installed_compilers=compilers,
             available_models=configured_models or [],
             capabilities_status=status,

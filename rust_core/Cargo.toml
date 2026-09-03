@@ -1,0 +1,23 @@
+﻿[package]
+name = "agent_rust_core"
+version = "0.1.0"
+edition = "2021"
+authors = ["Rezky Aditya <rezkyaditya@example.com>"]
+description = "High-performance native Rust core engine for Local AI Agent"
+
+[dependencies]
+sysinfo = "0.30"
+walkdir = "2.4"
+regex = "1.10"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+
+[[bin]]
+name = "agent-rust-core"
+path = "src/main.rs"
+
+[lib]
+name = "agent_rust_core"
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]

@@ -15,6 +15,7 @@ dependencies = [
     "sqlalchemy>=2.0",
     "cryptography>=42.0",
     "tomli-w>=1.0",
+    "pywebview>=5.0",
 ]
 
 [project.optional-dependencies]
@@ -27,6 +28,7 @@ test = [
 
 [project.scripts]
 agent = "agent.main:main"
+agent-desktop = "agent.desktop.launcher:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

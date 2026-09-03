@@ -247,6 +247,10 @@ class ModelManager:
         """
         return self._active_model
 
+    def get_parameters(self) -> ModelParameters:
+        """Kembalikan parameter runtime model yang sedang aktif."""
+        return self._parameters
+
     # ------------------------------------------------------------------
     # switch_model() â€” hot-swap model aktif (â‰¤30 detik)
     # ------------------------------------------------------------------
@@ -367,7 +371,7 @@ class ModelManager:
             return
 
         if model.model_type == "gguf":
-            async for token in self._generate_gguf(prompt, history):
+            async for token in self._generate_gguf(prompt, history, model=model):
                 yield token
         elif model.model_type == "api":
             async for token in self._generate_api(prompt, history):
@@ -376,15 +380,15 @@ class ModelManager:
             yield f"[Error: model_type tidak dikenal '{model.model_type}']"
 
     # ------------------------------------------------------------------
-    # update_parameters() â€” validasi dan simpan parameter baru
+    # update_parameters() — validasi dan simpan parameter baru
     # ------------------------------------------------------------------
 
     def update_parameters(self, params: ModelParameters) -> None:
         """Validasi dan perbarui parameter runtime model.
 
         Validasi rentang:
-        - ``temperature``: 0.0 â€“ 2.0
-        - ``context_length``: 128 â€“ 131072
+        - ``temperature``: 0.0 – 2.0
+        - ``context_length``: 128 – 131072
 
         Setelah validasi berhasil, parameter disimpan ke ``_parameters``
         dan ke ``[model_parameters]`` di ``config.toml``.
@@ -423,13 +427,13 @@ class ModelManager:
         )
 
     # ------------------------------------------------------------------
-    # set_default() â€” simpan model default ke config.toml
+    # set_default() — simpan model default ke config.toml
     # ------------------------------------------------------------------
 
     def set_default(self, name: str) -> None:
         """Simpan model ``name`` sebagai ``default_model`` di ``config.toml``.
 
-        Tidak memvalidasi apakah model tersebut ada dalam daftar â€” pemanggil
+        Tidak memvalidasi apakah model tersebut ada dalam daftar — pemanggil
         bertanggung jawab memastikan nama valid sebelum memanggil method ini.
 
         Args:
@@ -447,7 +451,7 @@ class ModelManager:
 
         - Untuk GGUF: lazy import ``llama_cpp``, muat di thread pool agar
           tidak memblokir event loop.
-        - Untuk API: tidak ada pemuatan sebenarnya â€” cukup verifikasi
+        - Untuk API: tidak ada pemuatan sebenarnya — cukup verifikasi
           konektivitas dengan HEAD request ringan (opsional).
 
         Args:
@@ -474,20 +478,9 @@ class ModelManager:
             return None
 
     def _load_gguf_sync(self, model: ModelConfig) -> Any:
-        """Muat model GGUF secara sinkron (dijalankan di thread pool).
-
-        Lazy import ``llama_cpp`` â€” jika tidak terinstal, log warning dan
-        kembalikan ``None`` (graceful degradation â€” Req 7.8).
-
-        Args:
-            model: ``ModelConfig`` dengan ``model_type == "gguf"``.
-
-        Returns:
-            Instansi ``llama_cpp.Llama`` atau ``None`` jika library tidak
-            tersedia.
-        """
+        """Muat model GGUF secara sinkron (dijalankan di thread pool)."""
         try:
-            import llama_cpp  # noqa: PLC0415 â€” lazy import by design
+            import llama_cpp  # noqa: PLC0415 — lazy import by design
         except ImportError:
             _logger.warning(
                 "llama-cpp-python tidak terinstal. Model GGUF '%s' tidak "
@@ -499,32 +492,43 @@ class ModelManager:
         model_path = model.path_or_url
         _logger.info("Memuat model GGUF dari '%s' ...", model_path)
 
-        llm = llama_cpp.Llama(
-            model_path=model_path,
-            n_ctx=self._parameters.context_length,
-            verbose=False,
-        )
-        _logger.info("Model GGUF '%s' berhasil dimuat.", model.name)
-        return llm
+        try:
+            import os
+            cpu_threads = max(2, min(4, (os.cpu_count() or 4) // 2))
+            llm = llama_cpp.Llama(
+                model_path=model_path,
+                n_ctx=self._parameters.context_length,
+                n_gpu_layers=-1,
+                n_threads=cpu_threads,
+                n_batch=512,
+                verbose=False,
+            )
+            _logger.info("Model GGUF '%s' berhasil dimuat.", model.name)
+            return llm
+        except Exception as exc:
+            _logger.warning("Gagal memuat dengan GPU (-1), mencoba di CPU: %s", exc)
+            try:
+                llm = llama_cpp.Llama(
+                    model_path=model_path,
+                    n_ctx=self._parameters.context_length,
+                    n_gpu_layers=0,
+                    n_threads=cpu_threads,
+                    n_batch=512,
+                    verbose=False,
+                )
+                return llm
+            except Exception as e2:
+                _logger.error("Gagal memuat model GGUF: %s", e2)
+                return None
 
     async def _ping_api_endpoint(self, base_url: str) -> None:
-        """Verifikasi API endpoint dapat dijangkau (best-effort).
-
-        Gagal diam-diam â€” tidak raise exception agar switch_model tidak
-        terblokir oleh masalah konektivitas sementara.
-
-        Args:
-            base_url: URL dasar Ollama / llama.cpp server.
-        """
+        """Verifikasi API endpoint dapat dijangkau (best-effort)."""
         try:
             import httpx  # noqa: PLC0415
             async with httpx.AsyncClient(timeout=5.0) as client:
                 await client.get(base_url)
         except Exception:  # noqa: BLE001
-            _logger.debug(
-                "API endpoint '%s' tidak dapat dijangkau (diabaikan).",
-                base_url,
-            )
+            pass
 
     # ------------------------------------------------------------------
     # Internal: _generate_gguf()
@@ -534,36 +538,35 @@ class ModelManager:
         self,
         prompt: str,
         history: list,
+        model: ModelConfig | None = None,
     ) -> AsyncIterator[str]:
-        """Stream token dari model GGUF via llama-cpp-python.
+        """Stream token dari model GGUF via llama-cpp-python."""
+        target_model = model or self._active_model
+        if self._llm_handle is None and target_model and target_model.model_type == "gguf":
+            yield f"[Memuat model GGUF '{target_model.name}' ke memori...]\n"
+            self._llm_handle = await self._load_model(target_model)
+            if self._llm_handle:
+                yield f"[Model GGUF '{target_model.name}' siap!]\n\n"
 
-        Menjalankan inferensi di thread pool untuk tidak memblokir event loop.
-        Token di-yield satu per satu melalui ``asyncio.Queue``.
-
-        Args:
-            prompt: Prompt teks.
-            history: Riwayat percakapan (saat ini diabaikan oleh backend GGUF;
-                pemanggil dapat menyertakan history dalam prompt).
-
-        Yields:
-            String token.
-        """
         if self._llm_handle is None:
-            yield "[Error: Model GGUF belum dimuat. Pastikan llama-cpp-python terinstal.]"
+            yield "[Error: Model GGUF belum dimuat. Pastikan file model .gguf ada dan valid.]"
             return
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+        # Batasi output generasi per langkah agar tidak melebihi konteks
+        gen_max_tokens = min(1024, max(256, self._parameters.context_length // 2))
 
         def _run_inference() -> None:
             """Jalankan inferensi GGUF dan masukkan token ke queue."""
             try:
                 generator = self._llm_handle(
                     prompt,
-                    max_tokens=self._parameters.context_length,
+                    max_tokens=300,
                     temperature=self._parameters.temperature,
-                    stream=True,
-                )
+                    stop=["<|im_end|>", "<|endoftext|>"],
+                    stream=True,)
                 for chunk in generator:
                     token_text: str = (
                         chunk.get("choices", [{}])[0]
@@ -580,7 +583,7 @@ class ModelManager:
             finally:
                 loop.call_soon_threadsafe(queue.put_nowait, None)  # sentinel
 
-        # Jalankan inference di background thread
+        # Jalankan inference di background thread pool
         loop.run_in_executor(None, _run_inference)
 
         # Yield token dari queue

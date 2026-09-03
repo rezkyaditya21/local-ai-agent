@@ -115,8 +115,19 @@ def _parse_tool_calls(text: str) -> list[ToolCall]:
         if not isinstance(data, dict):
             continue
 
-        tool_name: str = data.get("tool") or data.get("tool_name") or ""
+        tool_name: str = data.get("tool") or data.get("tool_name") or data.get("name") or ""
+        op = data.get("operation", "")
+        if not tool_name:
+            if op in ("system_telemetry", "fast_scan", "fast_grep"):
+                tool_name = "rust_core"
+            elif op in ("view", "write", "replace"):
+                tool_name = "file_editor"
+            elif op == "run_command" or "command" in data:
+                tool_name = "shell"
+
         params: dict = data.get("params", {})
+        if not params and isinstance(data, dict):
+            params = {k: v for k, v in data.items() if k not in ("tool", "tool_name", "name")}
 
         if not tool_name:
             continue

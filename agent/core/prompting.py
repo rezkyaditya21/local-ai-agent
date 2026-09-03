@@ -1,7 +1,9 @@
 """
 agent/core/prompting.py
 
-Membangun prompt agent: katalog tool, instruksi pemanggilan JSON, dan konteks memori.
+Antigravity-Grade Agentic Prompting Engine for Local AI Agent.
+Injects deep system awareness, Rust-powered high-speed tools, surgical file editing,
+and autonomous self-healing execution loops into the LLM context.
 """
 
 from __future__ import annotations
@@ -11,49 +13,51 @@ from typing import Any
 from agent.core.evaluator import VerificationResult
 from agent.models.schemas import ToolResult
 
-_MAX_RESULT_CHARS = 2000
+_MAX_RESULT_CHARS = 2500
 
 TOOL_CALL_INSTRUCTIONS = """\
-Kamu adalah AI Assistant yang cerdas, ramah, komunikatif, dan memiliki akses penuh ke sistem lokal, terminal/shell, filesystem, dan internet.
+Kamu adalah Antigravity-Grade Autonomous AI Engineering Assistant yang cerdas, proaktif, dan berkuasa penuh atas sistem lokal.
+Kamu memiliki akses langsung ke sistem operasi Windows 11, terminal PowerShell/CMD, filesystem, mesin performa tinggi Rust Core, dan internet.
 
-GAYA BAHASA & KOMUNIKASI:
-- Berbicaralah dalam Bahasa Indonesia yang luwes, santai, dan alami seperti rekan kerja/partner diskusi yang asik dan solutif.
-- Hindari bahasa kaku, baku berlebihan, atau kalimat template robotik.
-- Sesuaikan nada bicara dengan pengguna: jika pengguna menyapa santai ("hai", "halo", "bro", "p"), balas dengan ramah dan santai.
-- Jawab secara jelas, to-the-point, dan mudah dipahami.
+LINGKUNGAN SISTEM:
+- OS: Windows 11 Pro 64-bit | Shell: PowerShell / CMD
+- Hardware: Intel Core i5-8365U (4C/8T Turbo 4.10GHz) | RAM: 16 GB | Storage: SSD C: (System) & HDD E: (Media/Archive)
+- Runtime: Python 3.11, Node.js v24, Git 2.50, Rust Native Engine
+
+GAYA KOMUNIKASI & KERJA:
+- Berbicaralah dalam Bahasa Indonesia yang luwes, santai, percaya diri, dan solutif layaknya senior engineer.
+- Selalu berorientasi pada TINDAKAN NYATA (Action-Oriented). Jangan hanya memberikan saran teoritis jika kamu bisa langsung mengeksekusi atau membuatkannya untuk pengguna.
+- Jika terjadi error pada perintah terminal atau kode, jangan menyerah: baca pesan error, analisis penyebabnya, perbaiki kodenya, dan uji ulang sampai benar-benar berhasil (Self-Healing).
 
 PENGGUNAAN TOOL:
-Untuk menjalankan tugas sistem atau mencari informasi, panggil tool via format JSON:
+Untuk menjalankan tugas, gunakan format JSON tunggal atau terstruktur:
 {"tool": "<nama_tool>", "params": {<parameter>}}
 
 Daftar Tool Utama:
-- Terminal / Shell: {"tool": "shell", "params": {"command": "<perintah terminal>"}}
-- Internet / Web Search: {"tool": "web_search", "params": {"query": "<kata kunci>"}}
-- HTTP API / Fetch URL: {"tool": "http_api", "params": {"method": "GET", "url": "<url>"}}
-- Filesystem: {"tool": "filesystem", "params": {"operation": "read_file"|"write_file"|"list_dir", "path": "<path>"}}
-- Pencarian Kode: {"tool": "code_search", "params": {"query": "<simbol/teks>"}}
-- Git: {"tool": "git", "params": {"command": "<subcommand git>"}}
+- Mesin Rust Core: {"tool": "rust_core", "params": {"operation": "system_telemetry"|"fast_scan"|"fast_grep", ...}}
+- Editor Berkas Bedah: {"tool": "file_editor", "params": {"operation": "view"|"write"|"replace", "path": "...", ...}}
+- Terminal Windows: {"tool": "shell", "params": {"command": "<perintah powershell/cmd>"}}
+- Filesystem: {"tool": "filesystem", "params": {"operation": "read_file"|"write_file"|"list_dir", "path": "..."}}
+- Pencarian Kode: {"tool": "code_search", "params": {"query": "..."}}
+- Eksekusi Python: {"tool": "python_exec", "params": {"code": "..."}}
+- Internet / Web Search: {"tool": "web_search", "params": {"query": "..."}}
+- Git: {"tool": "git", "params": {"command": "status"|"diff"|"commit"|...}}
 
 Aturan:
-- Gunakan tool HANYA jika pengguna meminta tindakan yang memerlukan eksekusi terminal, akses internet, atau manipulasi file.
-- Untuk obrolan biasa atau pertanyaan umum tanpa tool, langsung jawab dengan teks santai tanpa JSON tool.
-- Jangan mengarang hasil eksekusi; ceritakan hasil tool yang sebenarnya dengan bahasa yang enak dibaca.
+- Gunakan tool saat pengguna meminta tindakan rekayasa, file, pencarian, atau status sistem.
+- Untuk obrolan biasa atau tanya-jawab umum, jawab langsung dengan teks santai tanpa format JSON.
 """
 
 GOAL_AWARE_INSTRUCTIONS = """\
-Kamu adalah Autonomous Local AI Agent yang cerdas dan solutif, dengan akses penuh ke terminal lokal, filesystem, dan internet.
-Tujuan kamu adalah menyelesaikan tugas yang diminta pengguna secara tuntas dan berkualitas.
+Kamu adalah Autonomous Local AI Agent berkemampuan penuh (Antigravity-Grade).
+Tujuan utama kamu adalah menyelesaikan instruksi pengguna sampai 100% tuntas dan terverifikasi.
 
-GAYA BAHASA:
-- Komunikatif, percaya diri, ramah, dan solutif dalam Bahasa Indonesia yang alami.
-
-ATURAN UTAMA:
-1. Gunakan tool dengan format JSON:
-   {"tool": "<nama_tool>", "params": {<param>}}
-2. Kamu memiliki akses terminal via `shell` dan internet via `web_search` / `http_api` / `browser`.
-3. Kamu harus MEMVERIFIKASI bahwa tujuan benar-benar tercapai sebelum mengatakan selesai.
-4. Keberhasilan eksekusi tool BUKAN bukti tujuan tercapai; verifikasi output, tes, dan status file.
-5. Jika ada error atau kendala, analisis penyebabnya dan temukan solusi terbaik.
+PRINSIP EKSEKUSI OTONOM:
+1. Pahami akar masalah dan rancang langkah penyelesaian yang presisi.
+2. Gunakan tool secara proaktif (buat file, jalankan skrip, uji coba, periksa sistem).
+3. Selalu VERIFIKASI hasil eksekusi: baca output tool, pastikan tidak ada error, dan pastikan file/fitur bekerja sesuai harapan.
+4. Jika menemui kegagalan/bug, lakukan iterasi: ubah pendekatan, perbaiki error, dan uji kembali hingga tuntas.
+5. Laporkan hasil akhir kepada pengguna secara ringkas, jelas, dan ramah.
 """
 
 
@@ -76,157 +80,121 @@ def summarize_tool_results(results: list[ToolResult]) -> str:
 
 def build_chat_prompt(
     instruction: str,
-    tool_catalog: str,
+    tool_catalog: str = "",
     memory_text: str = "",
     skills_text: str = "",
+    history_text: str = "",
+    last_results_text: str = "",
+    task_focus: str = "",
+    **kwargs: Any,
 ) -> str:
-    """Prompt satu-siklus (mode /chat) dengan katalog tool, memori, dan skill relevan."""
-    parts = [
-        TOOL_CALL_INSTRUCTIONS,
-        "",
-        "Katalog tool:",
-        tool_catalog or "(tidak ada tool aktif)",
-    ]
-    if skills_text.strip():
-        parts.extend(["", skills_text.strip()])
-    if memory_text.strip():
-        parts.extend(["", "Memori relevan:", memory_text.strip()])
-    parts.extend(["", "Instruksi pengguna:", instruction])
-    return "\n".join(parts)
+    """Bangun prompt interaktif / chat dengan katalog tool dan konteks sistem."""
+    sections: list[str] = [TOOL_CALL_INSTRUCTIONS]
+
+    if memory_text:
+        sections.append(f"KONTEKS MEMORI SISTEM:\n{memory_text}")
+
+    if skills_text:
+        sections.append(f"KEAHLIAN / SKILLS TERKAIT:\n{skills_text}")
+
+    if tool_catalog:
+        sections.append(f"KATALOG TOOL TERSEDIA:\n{tool_catalog}")
+
+    if history_text:
+        sections.append(f"RIWAYAT PERCAKAPAN:\n{history_text}")
+
+    if last_results_text and last_results_text != "(belum ada hasil tool)":
+        sections.append(f"HASIL EKSEKUSI TOOL TERAKHIR:\n{last_results_text}")
+
+    if task_focus:
+        sections.append(f"FOKUS TUGAS SAAT INI:\n{task_focus}")
+
+    sections.append(f"PERMINTAAN PENGGUNA:\n{instruction}")
+    return "\n\n".join(sections)
 
 
 def build_task_prompt(
-    *,
     goal: str,
-    tool_catalog: str,
-    iteration: int,
-    budget_summary: str,
+    tool_catalog: str = "",
+    iteration: int = 1,
+    budget_summary: str = "",
     memory_text: str = "",
-    skills_text: str = "",
     capability_text: str = "",
-    last_results: list[ToolResult] | None = None,
-    last_eval: VerificationResult | None = None,
-    extra: str = "",
+    last_results: Any = None,
+    last_eval: Any = None,
+    subtasks_text: str = "",
+    last_action: str = "",
+    verification_feedback: str = "",
+    last_results_text: str = "",
+    **kwargs: Any,
 ) -> str:
-    """Prompt closed-loop: goal, katalog, memori, skill, dan hasil iterasi sebelumnya."""
-    parts = [
+    """Bangun prompt autonomous goal loop."""
+    sections: list[str] = [
         GOAL_AWARE_INSTRUCTIONS,
-        "",
-        f"Tujuan: {goal}",
-        f"Iterasi: {iteration}",
-        f"Anggaran: {budget_summary}",
-        "",
-        "Katalog tool:",
-        tool_catalog or "(tidak ada tool aktif)",
+        f"TUJUAN UTAMA: {goal}",
+        f"ITERASI SAAT INI: {iteration}",
     ]
-    if skills_text.strip():
-        parts.extend(["", skills_text.strip()])
-    if capability_text.strip():
-        parts.extend(["", "Kemampuan system:", capability_text.strip()])
-    if memory_text.strip():
-        parts.extend(["", "Memori relevan:", memory_text.strip()])
+
+    if budget_summary:
+        sections.append(f"SISA BUDGET EKSEKUSI: {budget_summary}")
+
+    if capability_text:
+        sections.append(f"KEMAMPUAN SISTEM:\n{capability_text}")
+
+    if subtasks_text:
+        sections.append(f"RENCANA SUBTASKS:\n{subtasks_text}")
+
+    if memory_text:
+        sections.append(f"KONTEKS MEMORI:\n{memory_text}")
+
+    if tool_catalog:
+        sections.append(f"KATALOG TOOL TERSEDIA:\n{tool_catalog}")
+
+    if last_action:
+        sections.append(f"TINDAKAN SEBELUMNYA:\n{last_action}")
+
     if last_results:
-        parts.extend(["", "Hasil tool iterasi sebelumnya:", summarize_tool_results(last_results)])
-    if last_eval is not None:
-        status = "langkah sehat" if last_eval.is_verified else "ada masalah"
-        parts.append(f"Evaluasi langkah: {status} (confidence {last_eval.confidence_score:.2f})")
-        if last_eval.failure_reasons:
-            parts.append("Alasan: " + "; ".join(last_eval.failure_reasons))
-        if last_eval.evidence:
-            parts.append("Bukti: " + "; ".join(last_eval.evidence[:5]))
-    if extra.strip():
-        parts.extend(["", extra.strip()])
-    parts.extend(
-        [
-            "",
-            "Lanjutkan pekerjaan menuju tujuan. Jika tujuan sudah terpenuhi berdasarkan "
-            "bukti di atas, berikan jawaban akhir tanpa JSON tool. "
-            "Jika belum, gunakan tool yang sesuai untuk melanjutkan.",
-        ]
-    )
-    return "\n".join(parts)
+        sections.append(f"HASIL TOOL SEBELUMNYA:\n{summarize_tool_results(last_results)}")
+    elif last_results_text and last_results_text != "(belum ada hasil tool)":
+        sections.append(f"HASIL TOOL SEBELUMNYA:\n{last_results_text}")
 
+    if verification_feedback or last_eval:
+        sections.append(f"EVALUASI HASIL:\n{verification_feedback or last_eval}")
 
-def build_goal_verification_prompt(
-    *,
-    goal: str,
-    tool_results_summary: str,
-    iteration: int,
-) -> str:
-    """Bangun prompt untuk memverifikasi goal via LLM."""
-    return (
-        f"Verifikasi apakah tujuan berikut benar-benar tercapai:\n\n"
-        f"Tujuan: {goal}\n\n"
-        f"Hasil eksekusi:\n{tool_results_summary}\n\n"
-        f"Analisis secara objektif:\n"
-        f"1. Apakah semua aspek tujuan sudah terpenuhi?\n"
-        f"2. Apakah ada bukti konkret (test lulus, file berubah, error hilang)?\n"
-        f"3. Jika belum, langkah apa yang masih diperlukan?\n\n"
-        f"Balas dalam format JSON:\n"
-        f'{{"status": "completed" atau "in_progress" atau "failed", '
-        f'"confidence": 0.0-1.0, '
-        f'"evidence": ["bukti1", "bukti2"], '
-        f'"failure_reasons": ["alasan1"], '
-        f'"should_replan": true/false, '
-        f'"next_steps": ["langkah1"]}}'
-    )
-
-
-def format_memory_entries(entries: list[Any]) -> str:
-    """Format entri long-term memory menjadi teks prompt."""
-    if not entries:
-        return ""
-    lines: list[str] = []
-    for entry in entries:
-        key = getattr(entry, "key", "")
-        content = getattr(entry, "content", "")
-        category = getattr(entry, "category", "")
-        lines.append(f"- [{category}] {key}: {content}")
-    return "\n".join(lines)
+    sections.append("Tentukan tindakan terbaik berikutnya via format JSON tool atau jawab jika tujuan sudah tercapai.")
+    return "\n\n".join(sections)
 
 
 def build_memory_context(
-    working: dict[str, Any] | None = None,
-    task_history: list[dict[str, Any]] | None = None,
-    long_term: list[Any] | None = None,
-    project_knowledge: dict[str, Any] | None = None,
-    self_knowledge: dict[str, Any] | None = None,
+    working: Any = None,
+    task_history: Any = None,
+    long_term: Any = None,
+    project_knowledge: Any = None,
+    self_knowledge: Any = None,
+    knowledge: Any = None,
+    **kwargs: Any,
 ) -> str:
-    """Bangun context string dari semua layer memori untuk disuntikkan ke prompt."""
+    """Bangun ringkasan konteks memori secara aman untuk list atau dict."""
     parts: list[str] = []
-
     if working:
-        parts.append("Working Memory:")
-        for k, v in working.items():
-            parts.append(f"  {k}: {str(v)[:200]}")
-
-    if task_history:
-        parts.append("Riwayat Tugas:")
-        for item in task_history[-5:]:
-            parts.append(f"  - {item.get('goal', '')}: {item.get('status', '')}")
-
+        if isinstance(working, list):
+            parts.append("Working Memory: " + ", ".join(str(w.get("content", w) if isinstance(w, dict) else w)[:80] for w in working[:3]))
+        else:
+            parts.append(f"Working Memory: {str(working)[:120]}")
     if long_term:
-        parts.append("Pengetahuan Long-Term:")
-        for entry in long_term[:5]:
-            key = getattr(entry, "key", "")
-            content = getattr(entry, "content", "")
-            parts.append(f"  - {key}: {content[:150]}")
-
-    if project_knowledge:
-        parts.append("Pengetahuan Proyek:")
-        for k, v in project_knowledge.items():
-            parts.append(f"  - {k}: {str(v)[:150]}")
-
+        if isinstance(long_term, list):
+            parts.append("Long-term Memory:\n" + "\n".join(f"- {str(m)[:100]}" for m in long_term[:5]))
+        elif isinstance(long_term, dict):
+            parts.append("Long-term Memory:\n" + "\n".join(f"- {k}: {str(v)[:100]}" for k, v in list(long_term.items())[:5]))
+    pk = project_knowledge or knowledge
+    if pk:
+        if isinstance(pk, list):
+            parts.append("Project Knowledge:\n" + "\n".join(f"- {str(k.get('content', k) if isinstance(k, dict) else k)[:100]}" for k in pk[:3]))
+        elif isinstance(pk, dict):
+            parts.append("Project Knowledge:\n" + "\n".join(f"- {k}: {str(v)[:100]}" for k, v in list(pk.items())[:5]))
     if self_knowledge:
-        failures = self_knowledge.get("tool_failure_patterns", {})
-        strategies = self_knowledge.get("successful_strategies", [])
-        if failures:
-            parts.append("Tool Failure Patterns:")
-            for tool, count in failures.items():
-                parts.append(f"  - {tool}: {count} kegagalan")
-        if strategies:
-            parts.append("Strategi Sukses:")
-            for s in strategies[-3:]:
-                parts.append(f"  - {s.get('strategy', '')[:100]}")
-
-    return "\n".join(parts) if parts else ""
+        if isinstance(self_knowledge, dict):
+            parts.append("Self Knowledge:\n" + "\n".join(f"- {k}: {str(v)[:100]}" for k, v in list(self_knowledge.items())[:5]))
+        elif isinstance(self_knowledge, list):
+            parts.append("Self Knowledge:\n" + "\n".join(f"- {str(s.get('content', s) if isinstance(s, dict) else s)[:100]}" for s in self_knowledge[:5]))
+    return "\n".join(parts)

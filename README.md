@@ -4,7 +4,7 @@
   <a href="https://github.com/rezkyaditya21/local-ai-agent"><img src="https://img.shields.io/badge/Python-3.11%2B-blue?style=for-the-badge&logo=python" alt="Python 3.11+"></a>
   <a href="https://github.com/rezkyaditya21/local-ai-agent"><img src="https://img.shields.io/badge/Tests-100%25%20Passed-brightgreen?style=for-the-badge&logo=pytest" alt="Pytest Passed"></a>
   <a href="https://github.com/rezkyaditya21/local-ai-agent"><img src="https://img.shields.io/badge/Architecture-Autonomous%20Loop-orange?style=for-the-badge" alt="Autonomous AI Agent"></a>
-  <a href="https://github.com/rezkyaditya21/local-ai-agent"><img src="https://img.shields.io/badge/Backend-Ollama%20%7C%20GGUF-purple?style=for-the-badge" alt="Ollama & GGUF"></a>
+  <a href="https://github.com/rezkyaditya21/local-ai-agent"><img src="https://img.shields.io/badge/Backend-GGUF%20(llama--cpp--python)-purple?style=for-the-badge" alt="GGUF Backend"></a>
   <a href="https://github.com/rezkyaditya21/local-ai-agent/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License MIT"></a>
 </p>
 
@@ -32,7 +32,7 @@
 - **🧠 Multi-Tiered Memory System**: Memisahkan *Working Memory* (tugas aktif), *Long-Term Memory* (penyimpanan permanen aturan & fakta), dan *Project Knowledge*.
 - **📊 Multi-Step Goal Planner**: Memecah instruksi kompleks menjadi `Goal -> Subtasks -> Actions -> Verification -> Result`.
 - **🛡️ Checkpoint & Rollback Recovery Engine**: Membuat snapshot repositori otomatis sebelum modifikasi kode dan memulihkan (*rollback*) jika pengujian gagal.
-- **⚡ Dual Backend Support (Ollama & GGUF)**: Dukungan *hot-swap* model API Ollama atau file `.gguf` lokal langsung tanpa restart.
+- **⚡ GGUF Local Model Support**: Menjalankan model kuantisasi GGUF secara langsung dan efisien menggunakan `llama-cpp-python` tanpa ketergantungan server eksternal.
 
 ---
 
@@ -70,7 +70,7 @@
 
 ### 1. Prasyarat System
 - Python 3.11 atau lebih baru
-- [Ollama](https://ollama.com) (Opsional, jika memilih backend API Ollama)
+- Model berformat `.gguf` (misalnya Qwen 2.5 Coder 7B GGUF)
 
 ### 2. Instalasi
 ```powershell
@@ -83,41 +83,30 @@ pip install -e .
 pip install -e .[test]
 ```
 
-### 3. Mengunduh Model (Ollama)
-```powershell
-ollama pull llama3.2:3b
-```
-
-### 4. Menjalankan Agent
-```powershell
-python -m agent
-```
-
----
-
-## ⚙️ Multi-Model Configuration (`config.toml`)
-
-Anda dapat mendaftarkan beberapa model sekaligus di berkas `config.toml`:
+### 3. Konfigurasi Model GGUF (`config.toml`)
+Tentukan path file model `.gguf` Anda pada file `config.toml`:
 
 ```toml
-default_model = "llama3.2:3b"
+default_model = "qwen7b"
 
-# Opsi 1: Model via Ollama API
 [[models]]
-name = "llama3.2:3b"
-model_type = "api"
-path_or_url = "http://localhost:11434"
-
-# Opsi 2: Model GGUF Lokal Langsung
-[[models]]
-name = "model_gguf_lokal"
+name = "qwen7b"
 model_type = "gguf"
 path_or_url = "C:/path/ke/model_anda.gguf"
 ```
 
-Beralih model saat aplikasi berjalan:
-```text
-> /model switch model_gguf_lokal
+### 4. Menjalankan Agent
+
+**Mode Desktop GUI (Native Window / Webview):**
+```powershell
+python run_desktop.py
+# atau
+agent-desktop
+```
+
+**Mode Terminal CLI:**
+```powershell
+python -m agent
 ```
 
 ---
@@ -139,13 +128,15 @@ local-ai-agent/
 ├── agent/
 │   ├── cli/               # CLI REPL interface & Rich formatting
 │   ├── core/              # Orchestrator, Planner, System Inspector, Executor
+│   ├── desktop/           # Desktop GUI (PyWebView, Bridge & Modern Web UI)
 │   ├── memory/            # Multi-Tiered Memory System (Working & Long-Term)
-│   ├── models/            # Model Manager (Ollama API & GGUF loader)
+│   ├── models/            # Model Manager (GGUF loader via llama-cpp-python)
 │   ├── self_improvement/  # Checkpoint Manager & Controlled Experiment Engine
 │   └── tools/             # 13 Built-in Engineering & System Tools
 ├── tests/
-│   └── unit/              # 142 Unit test suites
-├── config.toml            # Application & Multi-model configuration
+│   └── unit/              # Unit test suites (224 tests)
+├── run_desktop.py         # Shortcut launcher for Desktop GUI
+├── config.toml            # Application & GGUF Model configuration
 └── pyproject.toml         # Package definition & dependencies
 ```
 

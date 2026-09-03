@@ -83,6 +83,8 @@ from agent.tools import (
     TestRunnerTool,
     ToolRegistry,
     WebSearchTool,
+    RustCoreTool,
+    FileEditorTool,
 )
 
 # ---------------------------------------------------------------------------
@@ -438,6 +440,8 @@ def _register_builtin_tools(registry: ToolRegistry, vault: CredentialVault) -> N
         (SystemInspectTool(), "builtin"),
         (ProjectInspectTool(), "builtin"),
         (BenchmarkTool(), "builtin"),
+        (RustCoreTool(), "builtin"),
+        (FileEditorTool(), "builtin"),
     ]
 
     for tool, source in tools_to_register:

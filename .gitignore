@@ -43,3 +43,11 @@ audit.log
 memory.json
 checkpoints/
 .kiro/
+
+# Rust build artifacts
+target/
+rust_core/target/
+*.gguf
+*.bin
+*.db
+

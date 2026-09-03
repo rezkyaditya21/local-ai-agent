@@ -1,4 +1,4 @@
-default_model = "llama3.2:3b"
+default_model = "qwen7b"
 tool_directories = []
 sandbox_enabled = false
 shell_timeout_seconds = 30
@@ -12,15 +12,7 @@ max_runtime_seconds = 300
 max_retries = 3
 
 # ---------------------------------------------------------------------------
-# Opsi 1: Model via Ollama API
-# ---------------------------------------------------------------------------
-[[models]]
-name = "llama3.2:3b"
-model_type = "api"
-path_or_url = "http://localhost:11434"
-
-# ---------------------------------------------------------------------------
-# Opsi 2: Model GGUF Qwen 2.5 Coder 7B (Lokal)
+# Model GGUF Qwen 2.5 Coder 7B (Lokal)
 # ---------------------------------------------------------------------------
 [[models]]
 name = "qwen7b"
