@@ -125,11 +125,11 @@ model_backend = LocalModelBackend()
 def extract_file_target(text: str) -> str:
     text_clean = text.strip()
     name = None
-    m = re.search(r'(?:bernama|dengan nama|nama)\s+['"]?([a-zA-Z0-9_\-\.]+)['"]?', text_clean, re.IGNORECASE)
+    m = re.search(r'(?:bernama|dengan nama|nama)\s+["\']?([a-zA-Z0-9_\-\.]+)["\']?', text_clean, re.IGNORECASE)
     if m:
         name = m.group(1).strip()
     else:
-        m2 = re.search(r'file\s+['"]?(?:bernama\s+)?([a-zA-Z0-9_\-\.]+)['"]?', text_clean, re.IGNORECASE)
+        m2 = re.search(r'file\s+["\']?(?:bernama\s+)?([a-zA-Z0-9_\-\.]+)["\']?', text_clean, re.IGNORECASE)
         if m2:
             candidate = m2.group(1).strip()
             if candidate.lower() != "bernama":
@@ -319,7 +319,7 @@ def handle_message(msg: dict) -> dict:
             }
 
         if "shell.run" in tool_names and iteration == 1 and any(k in goal_lower for k in ["jalankan perintah", "eksekusi perintah", "run command", "terminal", "shell", "apakah kamu bisa menggunakan terminal", "bisa mengunakan terminal"]):
-            m_cmd = re.search(r'(?:perintah|command|shell)\s+[:'"]?(.+?)['"]?$', goal, re.IGNORECASE)
+            m_cmd = re.search(r'(?:perintah|command|shell)\s+[:"\']?(.+?)["\']?$', goal, re.IGNORECASE)
             cmd_str = m_cmd.group(1) if m_cmd else "dir"
             return {
                 "version": 1,
