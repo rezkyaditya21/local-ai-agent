@@ -3,7 +3,7 @@ use anyhow::{anyhow, Result};
 use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
-use tracing::{error, info};
+use tracing::info;
 use uuid::Uuid;
 
 pub struct PythonWorkerClient {
@@ -46,12 +46,47 @@ impl PythonWorkerClient {
         self.stdin.write_all(line.as_bytes()).await?;
         self.stdin.flush().await?;
 
-        if let Some(resp_line) = self.reader.next_line().await? {
+        while let Some(resp_line) = self.reader.next_line().await? {
             let resp: IpcMessage = serde_json::from_str(&resp_line)?;
-            Ok(resp.payload)
-        } else {
-            Err(anyhow!("Python worker closed connection prematurely"))
+            match resp.payload {
+                MessagePayload::TokenChunk { .. } => {
+                    // Ignore streaming tokens in non-streaming mode
+                }
+                final_payload => return Ok(final_payload),
+            }
         }
+        Err(anyhow!("Python worker closed connection prematurely"))
+    }
+
+    pub async fn send_request_streaming<F>(
+        &mut self,
+        payload: MessagePayload,
+        mut on_token: F,
+    ) -> Result<MessagePayload>
+    where
+        F: FnMut(&str),
+    {
+        let msg = IpcMessage {
+            version: 1,
+            id: Uuid::new_v4().to_string(),
+            payload,
+        };
+
+        let mut line = serde_json::to_string(&msg)?;
+        line.push('\n');
+        self.stdin.write_all(line.as_bytes()).await?;
+        self.stdin.flush().await?;
+
+        while let Some(resp_line) = self.reader.next_line().await? {
+            let resp: IpcMessage = serde_json::from_str(&resp_line)?;
+            match resp.payload {
+                MessagePayload::TokenChunk { token } => {
+                    on_token(&token);
+                }
+                final_payload => return Ok(final_payload),
+            }
+        }
+        Err(anyhow!("Python worker closed connection prematurely"))
     }
 
     pub async fn ping(&mut self) -> Result<String> {

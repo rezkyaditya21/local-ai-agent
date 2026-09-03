@@ -41,6 +41,18 @@ impl AgentRuntime {
         goal: &str,
         worker: &mut PythonWorkerClient,
     ) -> Result<Task> {
+        self.execute_goal_streaming(goal, worker, |_| {}).await
+    }
+
+    pub async fn execute_goal_streaming<F>(
+        &self,
+        goal: &str,
+        worker: &mut PythonWorkerClient,
+        mut on_token: F,
+    ) -> Result<Task>
+    where
+        F: FnMut(&str),
+    {
         info!("Memulai tugas otonom: '{}'", goal);
         let mut task = Task::new(goal);
         task.status = TaskStatus::Running;
@@ -54,7 +66,6 @@ impl AgentRuntime {
         while !sm.is_exhausted() {
             sm.transition(State::Planning);
 
-            // 1. Minta keputusan dari Python AI Layer
             let req = MessagePayload::DecisionRequest {
                 goal: task.goal.clone(),
                 iteration: sm.iteration() + 1,
@@ -62,7 +73,7 @@ impl AgentRuntime {
                 available_tools: tools.clone(),
             };
 
-            let resp = worker.send_request(req).await?;
+            let resp = worker.send_request_streaming(req, &mut on_token).await?;
             let (thought, action) = match resp {
                 MessagePayload::DecisionResponse { thought, action } => (thought, action),
                 MessagePayload::Error { message } => return Err(anyhow!("Python error: {message}")),

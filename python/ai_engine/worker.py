@@ -35,10 +35,13 @@ class LocalModelBackend:
         if current_path.exists():
             try:
                 import llama_cpp
+                # TURBO MULTI-THREADING OPTIMIZATION:
+                # n_threads=4 for generation, n_threads_batch=8 for prompt processing, n_batch=512
                 self._llm = llama_cpp.Llama(
                     model_path=str(current_path),
                     n_ctx=1024,
                     n_threads=4,
+                    n_threads_batch=8,
                     n_batch=512,
                     verbose=False,
                 )
@@ -61,21 +64,22 @@ class LocalModelBackend:
             return "Qwen 2.5 Coder 7B (Standard / Active)"
         return p.stem
 
-    def answer_direct(self, query: str) -> str:
+    def answer_direct_stream(self, query: str, msg_id: str):
         self.load()
         if not self.is_ready():
-            return (
+            msg = (
                 "Saya adalah Autonomous AI Agent Platform lokal berbasis hybrid Rust (Runtime) dan Python (AI Engine). "
                 "Saya dapat mengeksekusi tugas otonom, membaca/menulis file, mengecek sistem, dan menjalankan perintah lokal secara aman."
             )
+            return msg
+
         if "1.5b" in str(self._loaded_path).lower():
             model_tag = "Qwen 2.5 Coder 1.5B (Mode Kilat)"
         elif "14b" in str(self._loaded_path).lower():
             model_tag = "Qwen 2.5 Coder 14B (Mode Super Pintar)"
         else:
             model_tag = "Qwen 2.5 Coder 7B (Mode Standar)"
-        
-        # Bangun prompt dengan riwayat obrolan agar nyambung
+
         prompt = (
             f"<|im_start|>system\n"
             f"Kamu adalah Asisten AI Lokal otonom di laptop pengguna (Drive E:), ditenagai oleh model {model_tag}. "
@@ -84,20 +88,35 @@ class LocalModelBackend:
         )
         for h in self.history[-3:]:
             prompt += f"<|im_start|>{h['role']}\n{h['content']}<|im_end|>\n"
-        
+
         prompt += f"<|im_start|>user\n{query}<|im_end|>\n<|im_start|>assistant\n"
 
         try:
-            output = self._llm(
+            stream = self._llm(
                 prompt,
                 max_tokens=150,
                 temperature=0.3,
                 stop=["<|im_end|>", "<|endoftext|>"],
+                stream=True,
             )
-            res = output["choices"][0]["text"].strip()
+            tokens = []
+            for chunk in stream:
+                token = chunk["choices"][0]["text"]
+                tokens.append(token)
+                # Emit token_chunk live to stdout
+                chunk_msg = {
+                    "version": 1,
+                    "id": msg_id,
+                    "type": "token_chunk",
+                    "data": {"token": token}
+                }
+                sys.stdout.write(json.dumps(chunk_msg) + "\n")
+                sys.stdout.flush()
+
+            full_res = "".join(tokens).strip()
             self.history.append({"role": "user", "content": query})
-            self.history.append({"role": "assistant", "content": res})
-            return res
+            self.history.append({"role": "assistant", "content": full_res})
+            return full_res
         except Exception:
             return "Saya adalah Autonomous AI Agent Platform lokal yang siap membantu Anda mengeksekusi tugas di laptop ini."
 
@@ -106,11 +125,11 @@ model_backend = LocalModelBackend()
 def extract_file_target(text: str) -> str:
     text_clean = text.strip()
     name = None
-    m = re.search(r'(?:bernama|dengan nama|nama)\s+[\'"]?([a-zA-Z0-9_\-\.]+)[\'"]?', text_clean, re.IGNORECASE)
+    m = re.search(r'(?:bernama|dengan nama|nama)\s+['"]?([a-zA-Z0-9_\-\.]+)['"]?', text_clean, re.IGNORECASE)
     if m:
         name = m.group(1).strip()
     else:
-        m2 = re.search(r'file\s+[\'"]?(?:bernama\s+)?([a-zA-Z0-9_\-\.]+)[\'"]?', text_clean, re.IGNORECASE)
+        m2 = re.search(r'file\s+['"]?(?:bernama\s+)?([a-zA-Z0-9_\-\.]+)['"]?', text_clean, re.IGNORECASE)
         if m2:
             candidate = m2.group(1).strip()
             if candidate.lower() != "bernama":
@@ -127,7 +146,6 @@ def extract_file_target(text: str) -> str:
     return f"E:/agent_system/{name}"
 
 def clean_tool_context(context: str) -> str:
-    """Mengubah context JSON mentah dari tool menjadi format teks yang indah dan rapi"""
     prefix = "Hasil tool terakhir: "
     if context.startswith(prefix):
         raw = context[len(prefix):]
@@ -174,7 +192,7 @@ def handle_message(msg: dict) -> dict:
         tool_names = [t.get("name") for t in tools]
         goal_lower = goal.lower()
 
-        # JIKA SUDAH MENJALANKAN TOOL (Iterasi >= 2) -> LAPORKAN DENGAN BERSIH
+        # JIKA SUDAH MENJALANKAN TOOL (Iterasi >= 2)
         if iteration >= 2 and context and "Hasil tool terakhir" in context:
             clean_output = clean_tool_context(context)
             if "filesystem.write" in context:
@@ -240,9 +258,7 @@ def handle_message(msg: dict) -> dict:
                     }
                 }
 
-        # ITERASI 1: ANALISIS INTENT DAN PILIH TINDAKAN NYATA (TOOL CALL)
-
-        # 1. Intent Menulis / Membuat File (filesystem.write)
+        # ITERASI 1: ANALISIS INTENT DAN PILIH TINDAKAN NYATA
         if "filesystem.write" in tool_names and iteration == 1 and any(w in goal_lower for w in ["buat", "bikin", "tulis", "create", "write"]) and "file" in goal_lower:
             target_path = extract_file_target(goal)
             content_to_write = f"File '{Path(target_path).name}' berhasil dibuat secara otonom oleh Local AI Agent Platform.\nWaktu pembuatan: {goal}"
@@ -265,7 +281,6 @@ def handle_message(msg: dict) -> dict:
                 }
             }
 
-        # 2. Intent Membaca File (filesystem.read)
         if "filesystem.read" in tool_names and iteration == 1 and any(w in goal_lower for w in ["baca", "lihat isi", "read"]) and "file" in goal_lower:
             target_path = extract_file_target(goal)
             return {
@@ -286,7 +301,6 @@ def handle_message(msg: dict) -> dict:
                 }
             }
 
-        # 3. Intent Info Sistem (system.info)
         if "system.info" in tool_names and iteration == 1 and any(k in goal_lower for k in ["spek", "sistem", "inspeksi", "hardware", "ram", "cpu", "telemetri"]):
             return {
                 "version": 1,
@@ -304,9 +318,8 @@ def handle_message(msg: dict) -> dict:
                 }
             }
 
-        # 4. Intent Eksekusi Shell Command (shell.run)
         if "shell.run" in tool_names and iteration == 1 and any(k in goal_lower for k in ["jalankan perintah", "eksekusi perintah", "run command", "terminal", "shell", "apakah kamu bisa menggunakan terminal", "bisa mengunakan terminal"]):
-            m_cmd = re.search(r'(?:perintah|command|shell)\s+[:\'"]?(.+?)[\'"]?$', goal, re.IGNORECASE)
+            m_cmd = re.search(r'(?:perintah|command|shell)\s+[:'"]?(.+?)['"]?$', goal, re.IGNORECASE)
             cmd_str = m_cmd.group(1) if m_cmd else "dir"
             return {
                 "version": 1,
@@ -326,9 +339,9 @@ def handle_message(msg: dict) -> dict:
                 }
             }
 
-        # 5. Pertanyaan Umum / Percakapan Biasa (Chat Langsung via Model LLM dengan Memori)
+        # 5. PERCAKAPAN UMUM (LIVE TOKEN STREAMING)
         if iteration == 1:
-            answer = model_backend.answer_direct(goal)
+            answer = model_backend.answer_direct_stream(goal, msg_id)
             return {
                 "version": 1,
                 "id": msg_id,

@@ -30,7 +30,7 @@ enum Commands {
     },
     /// Tampilkan riwayat tugas yang pernah dieksekusi
     History,
-    /// Masuk ke Mode Percakapan Interaktif (Chat REPL) - Tidak langsung close
+    /// Masuk ke Mode Percakapan Interaktif (Chat REPL dengan Live Streaming)
     Chat,
 }
 
@@ -160,13 +160,24 @@ async fn main() -> anyhow::Result<()> {
                     break;
                 }
 
-                println!("(AI sedang berpikir...)");
-                match runtime.execute_goal(trimmed, &mut worker).await {
+                print!("AI: ");
+                io::stdout().flush()?;
+                let mut streamed_any = false;
+
+                match runtime.execute_goal_streaming(trimmed, &mut worker, |token| {
+                    print!("{}", token);
+                    let _ = io::stdout().flush();
+                    streamed_any = true;
+                }).await {
                     Ok(task) => {
-                        if let Some(last_step) = task.history.last() {
-                            if let agent_protocol::AgentAction::Finish { ref summary } = last_step.action {
-                                println!("\nAI: {}", summary);
+                        if !streamed_any {
+                            if let Some(last_step) = task.history.last() {
+                                if let agent_protocol::AgentAction::Finish { ref summary } = last_step.action {
+                                    println!("{}", summary);
+                                }
                             }
+                        } else {
+                            println!();
                         }
                         let _ = storage.save_task(&task);
                     }

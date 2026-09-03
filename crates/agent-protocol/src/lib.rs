@@ -43,6 +43,9 @@ pub enum MessagePayload {
         action: AgentAction,
     },
 
+    #[serde(rename = "token_chunk")]
+    TokenChunk { token: String },
+
     #[serde(rename = "error")]
     Error { message: String },
 }
