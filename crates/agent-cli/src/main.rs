@@ -3,6 +3,7 @@ use agent_runtime::ipc::PythonWorkerClient;
 use agent_runtime::AgentRuntime;
 use agent_storage::TaskStorage;
 use clap::{Parser, Subcommand};
+use std::io::{self, Write};
 use std::path::Path;
 
 #[derive(Parser)]
@@ -19,7 +20,7 @@ enum Commands {
     Doctor,
     /// Tampilkan daftar tool yang terdaftar
     Tools,
-    /// Jalankan tugas otonom secara mandiri
+    /// Jalankan tugas otonom secara mandiri (sekali jalan)
     Task {
         /// Tujuan atau instruksi tugas
         goal: String,
@@ -29,6 +30,8 @@ enum Commands {
     },
     /// Tampilkan riwayat tugas yang pernah dieksekusi
     History,
+    /// Masuk ke Mode Percakapan Interaktif (Chat REPL) - Tidak langsung close
+    Chat,
 }
 
 #[tokio::main]
@@ -100,7 +103,7 @@ async fn main() -> anyhow::Result<()> {
             
             let storage = TaskStorage::new(storage_dir)?;
             storage.save_task(&task)?;
-            println!("Data tersimpan: {}\\{}.json", storage_dir, task.id);
+            println!("\nData tersimpan: {}\\{}.json", storage_dir, task.id);
             println!("========================================");
         }
         Commands::History => {
@@ -111,8 +114,65 @@ async fn main() -> anyhow::Result<()> {
                 println!("  (Belum ada riwayat tugas)");
             } else {
                 for (idx, t) in tasks.iter().enumerate() {
-                    let id_str = t.id.to_string(); let id_prefix = &id_str[..8];
+                    let id_str = t.id.to_string();
+                    let id_prefix = if id_str.len() >= 8 { &id_str[..8] } else { &id_str };
                     println!("  [{}] ID: {} | Goal: '{}' | Status: {:?}", idx + 1, id_prefix, t.goal, t.status);
+                }
+            }
+        }
+        Commands::Chat => {
+            println!("==========================================================");
+            println!("       AUTONOMOUS AGENT INTERACTIVE CHAT (REPL)           ");
+            println!("  Ketik pertanyaan/perintah Anda. Ketik 'exit' untuk selesai. ");
+            println!("==========================================================");
+
+            print!("[1/2] Menghubungkan ke AI Engine & Memuat Model ke RAM... ");
+            io::stdout().flush()?;
+            let mut worker = PythonWorkerClient::spawn(python_bin, worker_script).await?;
+            let pong = worker.ping().await?;
+            println!("[OK]");
+            println!("[2/2] Model Aktif: {}\n", pong);
+            println!("--- Sesi Obrolan Aktif (Model Siap Standby di RAM) ---");
+
+            let runtime = AgentRuntime::new(10);
+            let storage = TaskStorage::new(storage_dir)?;
+
+            loop {
+                print!("\nAnda: ");
+                io::stdout().flush()?;
+
+                let mut input = String::new();
+                if io::stdin().read_line(&mut input).is_err() {
+                    break;
+                }
+
+                let trimmed = input.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+
+                if trimmed.eq_ignore_ascii_case("exit")
+                    || trimmed.eq_ignore_ascii_case("keluar")
+                    || trimmed.eq_ignore_ascii_case("quit")
+                    || trimmed.eq_ignore_ascii_case("q")
+                {
+                    println!("\nSampai jumpa! Sesi obrolan ditutup.");
+                    break;
+                }
+
+                println!("(AI sedang berpikir...)");
+                match runtime.execute_goal(trimmed, &mut worker).await {
+                    Ok(task) => {
+                        if let Some(last_step) = task.history.last() {
+                            if let agent_protocol::AgentAction::Finish { ref summary } = last_step.action {
+                                println!("\nAI: {}", summary);
+                            }
+                        }
+                        let _ = storage.save_task(&task);
+                    }
+                    Err(e) => {
+                        println!("\n[Error]: Gagal memproses instruksi: {}", e);
+                    }
                 }
             }
         }
