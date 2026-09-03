@@ -1,0 +1,16 @@
+[package]
+name = "agent-tools"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+agent-protocol = { path = "../agent-protocol" }
+async-trait = "0.1"
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+sysinfo = { workspace = true }
+walkdir = { workspace = true }
+regex = { workspace = true }

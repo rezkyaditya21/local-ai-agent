@@ -1,0 +1,9 @@
+[package]
+name = "agent-state"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+agent-core = { path = "../agent-core" }
+serde = { workspace = true }
+thiserror = { workspace = true }

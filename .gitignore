@@ -51,3 +51,9 @@ rust_core/target/
 *.bin
 *.db
 
+
+storage/tasks/
+compat_lib/
+*.exe
+*.pdb
+
