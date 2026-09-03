@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Central AI Hub - Pusat Kendali Autonomous AI Agent Lokal & Manajemen Sistem Laptop">
+  <title>Central AI Hub | Local Autonomous Suite</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+            <polyline points="2 17 12 22 22 17"></polyline>
+            <polyline points="2 12 12 17 22 12"></polyline>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h2>CENTRAL AI</h2>
+          <span>Autonomous Suite</span>
+        </div>
+      </div>
+
+      <nav class="nav-menu">
+        <button class="nav-btn active" data-tab="chat" id="tab-chat-btn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+          <span>AI Assistant</span>
+        </button>
+        <button class="nav-btn" data-tab="telemetry" id="tab-telemetry-btn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+          <span>Hardware & Disk</span>
+          <span class="badge-alert" id="disk-alert-dot" style="display:none;">!</span>
+        </button>
+        <button class="nav-btn" data-tab="files" id="tab-files-btn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+          <span>File Manager</span>
+        </button>
+        <button class="nav-btn" data-tab="tools" id="tab-tools-btn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+          <span>Tools & Sandbox</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="status-indicator">
+          <span class="dot-online"></span>
+          <span class="status-text" id="active-model-display">1.5B (Mode Kilat)</span>
+        </div>
+        <div class="quick-switch">
+          <label for="model-selector-side">Otak AI:</label>
+          <select id="model-selector-side">
+            <option value="1.5b">Qwen 1.5B (Kilat)</option>
+            <option value="7b">Qwen 7B (Standar)</option>
+            <option value="14b">Qwen 14B (Super Pintar)</option>
+          </select>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+      <!-- TOP HEADER -->
+      <header class="top-header">
+        <div class="page-title">
+          <h1 id="section-title">AI Assistant</h1>
+          <p id="section-desc">Percakapan otonom lokal dengan akses internet & kendali file</p>
+        </div>
+        <div class="header-badges">
+          <div class="stat-pill" id="pill-drive-c">
+            <span class="pill-label">SSD C:</span>
+            <span class="pill-val" id="header-drive-c-val">-- GB</span>
+          </div>
+          <div class="stat-pill" id="pill-drive-e">
+            <span class="pill-label">HDD E:</span>
+            <span class="pill-val" id="header-drive-e-val">-- GB</span>
+          </div>
+          <div class="stat-pill" id="pill-ram">
+            <span class="pill-label">RAM:</span>
+            <span class="pill-val" id="header-ram-val">-- GB</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- TAB 1: AI CHAT ASSISTANT -->
+      <section class="tab-pane active" id="pane-chat">
+        <div class="chat-container">
+          <div class="chat-history" id="chat-messages">
+            <!-- Welcome greeting -->
+            <div class="chat-bubble ai-bubble">
+              <div class="avatar">AI</div>
+              <div class="bubble-content">
+                <p>Halo! Selamat datang di <strong>Central AI Hub</strong> 🚀</p>
+                <p>Saya adalah AI otonom di laptopmu. Saya bisa:</p>
+                <ul>
+                  <li>🔍 <strong>Mencari Informasi di Internet</strong> secara <em>real-time</em>.</li>
+                  <li>📝 <strong>Membuat & Membaca Berkas</strong> di komputermu secara otomatis.</li>
+                  <li>💻 <strong>Menulis Kode Program</strong> (Python, Rust, Web, dll.).</li>
+                  <li>🧹 <strong>Membersihkan Ruang Disk</strong> agar Drive C tidak merah.</li>
+                </ul>
+                <p>Silakan ketik pertanyaan Anda di bawah, atau klik contoh cepat di bawah input box!</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Prompt Pills -->
+          <div class="prompt-pills">
+            <button class="pill-btn" data-prompt="cari di internet berita teknologi AI hari ini">🔍 Berita AI Hari Ini</button>
+            <button class="pill-btn" data-prompt="buatkan kode python game tebak angka">🎮 Game Tebak Angka</button>
+            <button class="pill-btn" data-prompt="cek spek sistem hardware laptop saya">💻 Cek Spek Laptop</button>
+            <button class="pill-btn" data-prompt="lihat isi folder C:/Users/rezky/Documents/agent">📁 Lihat File Agent</button>
+          </div>
+
+          <!-- Input Box -->
+          <div class="chat-input-wrapper">
+            <div class="input-controls">
+              <label class="toggle-control">
+                <input type="checkbox" id="check-web-search" checked>
+                <span class="toggle-label">🌐 Akses Internet</span>
+              </label>
+            </div>
+            <div class="input-row">
+              <textarea id="user-input" placeholder="Tanyakan apa saja ke AI lokal Anda..." rows="1"></textarea>
+              <button id="send-btn" class="send-btn" title="Kirim Pesan">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: HARDWARE & DISK MONITOR -->
+      <section class="tab-pane" id="pane-telemetry">
+        <div class="telemetry-grid">
+          <!-- Drive C Card -->
+          <div class="card card-glow" id="card-drive-c">
+            <div class="card-header">
+              <h3>SSD Sistem (Drive C:)</h3>
+              <span class="status-badge" id="c-badge-status">Checking...</span>
+            </div>
+            <div class="disk-visual">
+              <div class="progress-bar-bg">
+                <div class="progress-bar-fill" id="c-progress-fill" style="width: 80%;"></div>
+              </div>
+              <div class="disk-meta">
+                <span>Terpakai: <b id="c-used">-- GB</b></span>
+                <span>Sisa Bebas: <b id="c-free">-- GB</b></span>
+              </div>
+            </div>
+            <div class="cleaner-box" id="cleaner-box-c">
+              <p class="cleaner-hint" id="cleaner-hint-text">
+                Jika Drive C berwarna <strong>MERAH</strong>, klik tombol di bawah untuk membersihkan 3,2 GB rekaman browser sementara.
+              </p>
+              <button class="btn btn-primary btn-pulse" id="btn-clean-disk">
+                🧹 Bersihkan Cache & Pulihkan Ruang C Seketika
+              </button>
+              <div id="clean-result" class="clean-feedback" style="display:none;"></div>
+            </div>
+          </div>
+
+          <!-- Drive E Card -->
+          <div class="card" id="card-drive-e">
+            <div class="card-header">
+              <h3>Harddisk Eksternal (Drive E:)</h3>
+              <span class="status-badge badge-blue" id="e-badge-status">Checking...</span>
+            </div>
+            <div class="disk-visual">
+              <div class="progress-bar-bg">
+                <div class="progress-bar-fill fill-blue" id="e-progress-fill" style="width: 20%;"></div>
+              </div>
+              <div class="disk-meta">
+                <span>Terpakai: <b id="e-used">-- GB</b></span>
+                <span>Sisa Bebas: <b id="e-free">-- GB</b></span>
+              </div>
+            </div>
+            <p class="text-muted" style="margin-top: 1rem; font-size: 0.9rem;">
+              Drive E merupakan tempat ideal untuk menyimpan model-model raksasa (seperti Qwen 14B) tanpa membebani SSD utama.
+            </p>
+          </div>
+
+          <!-- RAM & CPU Card -->
+          <div class="card" id="card-ram-cpu">
+            <div class="card-header">
+              <h3>Memori RAM & Prosesor</h3>
+              <span class="status-badge badge-green">NORMAL</span>
+            </div>
+            <div class="specs-list">
+              <div class="spec-item">
+                <span class="spec-label">CPU Cores:</span>
+                <span class="spec-value" id="val-cpu-cores">4 Cores / 8 Threads</span>
+              </div>
+              <div class="spec-item">
+                <span class="spec-label">Total RAM:</span>
+                <span class="spec-value" id="val-ram-total">16.0 GB DDR4</span>
+              </div>
+              <div class="spec-item">
+                <span class="spec-label">RAM Digunakan:</span>
+                <span class="spec-value" id="val-ram-used">-- GB</span>
+              </div>
+              <div class="spec-item">
+                <span class="spec-label">RAM Bebas:</span>
+                <span class="spec-value" id="val-ram-free">-- GB</span>
+              </div>
+            </div>
+            <div class="progress-bar-bg" style="margin-top: 1rem;">
+              <div class="progress-bar-fill fill-purple" id="ram-progress-fill" style="width: 50%;"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: VISUAL FILE EXPLORER -->
+      <section class="tab-pane" id="pane-files">
+        <div class="file-explorer-container">
+          <div class="file-toolbar">
+            <button class="btn btn-sm" id="btn-file-up">⬆ Naik Satu Folder</button>
+            <span class="current-path" id="file-current-path">C:/Users/rezky/Documents/agent</span>
+            <button class="btn btn-sm btn-secondary" id="btn-refresh-files">🔄 Refresh</button>
+          </div>
+          <div class="file-layout">
+            <div class="file-list" id="file-list-container">
+              <!-- Dynamic file items -->
+            </div>
+            <div class="file-preview" id="file-preview-container">
+              <div class="preview-header">
+                <span id="preview-filename">Pilih file untuk melihat isinya</span>
+              </div>
+              <pre class="preview-body" id="preview-content">// Isi berkas teks akan ditampilkan di sini...</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: QUICK TOOLS -->
+      <section class="tab-pane" id="pane-tools">
+        <div class="tools-grid">
+          <div class="tool-card">
+            <div class="tool-icon">🎮</div>
+            <h4>Game Tebak Angka</h4>
+            <p>Jalankan game interaktif python yang dibuat oleh AI tadi malam.</p>
+            <button class="btn btn-secondary" onclick="sendQuickCommand('mainkan game tebak angka')">Mulai Game</button>
+          </div>
+          <div class="tool-card">
+            <div class="tool-icon">🏥</div>
+            <h4>Agent Doctor Check</h4>
+            <p>Verifikasi kesehatan Rust Core, Python IPC, dan Model GGUF.</p>
+            <button class="btn btn-secondary" onclick="sendQuickCommand('jalankan agent doctor')">Jalankan Doctor</button>
+          </div>
+          <div class="tool-card">
+            <div class="tool-icon">🌐</div>
+            <h4>Berita Terkini</h4>
+            <p>Pencarian berita terkini langsung via Google News RSS & Wikipedia.</p>
+            <button class="btn btn-secondary" onclick="sendQuickCommand('cari di internet berita nasional hari ini')">Cek Berita</button>
+          </div>
+          <div class="tool-card">
+            <div class="tool-icon">⚡</div>
+            <h4>Ganti ke Model 1.5B</h4>
+            <p>Aktifkan model super kilat untuk respon chat instan (< 1 detik).</p>
+            <button class="btn btn-secondary" onclick="switchModelDirect('1.5b')">Aktifkan 1.5B</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
