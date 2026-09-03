@@ -25,6 +25,7 @@ class LocalModelBackend:
     def __init__(self):
         self._llm = None
         self._loaded_path = None
+        self.history = []
 
     def load(self):
         current_path = get_active_model_path()
@@ -66,13 +67,19 @@ class LocalModelBackend:
                 "Saya dapat mengeksekusi tugas otonom, membaca/menulis file, mengecek sistem, dan menjalankan perintah lokal secara aman."
             )
         model_tag = "Qwen 2.5 Coder 1.5B (Mode Kilat)" if "1.5b" in str(self._loaded_path) else "Qwen 2.5 Coder 7B"
+        
+        # Bangun prompt dengan riwayat obrolan agar nyambung
         prompt = (
             f"<|im_start|>system\n"
-            f"Kamu adalah Local Autonomous AI Agent Platform yang berjalan mandiri di laptop pengguna (Drive E:), "
-            f"ditenagai oleh model {model_tag}. Jawab pertanyaan pengguna dengan ramah, lugas, dan jelas dalam Bahasa Indonesia.<|im_end|>\n"
-            f"<|im_start|>user\n{query}<|im_end|>\n"
-            f"<|im_start|>assistant\n"
+            f"Kamu adalah Asisten AI Lokal otonom di laptop pengguna (Drive E:), ditenagai oleh model {model_tag}. "
+            f"Kamu memiliki kendali otonom nyata: dapat membuat file, membaca file, mengecek sistem, dan menjalankan perintah terminal. "
+            f"Jawab selalu dalam Bahasa Indonesia yang ramah, sopan, dan solutif. Jika pertanyaan pengguna singkat atau menggantung, sambut dengan hangat dan tanyakan apa yang ingin dibantu.<|im_end|>\n"
         )
+        for h in self.history[-3:]:
+            prompt += f"<|im_start|>{h['role']}\n{h['content']}<|im_end|>\n"
+        
+        prompt += f"<|im_start|>user\n{query}<|im_end|>\n<|im_start|>assistant\n"
+
         try:
             output = self._llm(
                 prompt,
@@ -80,23 +87,22 @@ class LocalModelBackend:
                 temperature=0.3,
                 stop=["<|im_end|>", "<|endoftext|>"],
             )
-            return output["choices"][0]["text"].strip()
+            res = output["choices"][0]["text"].strip()
+            self.history.append({"role": "user", "content": query})
+            self.history.append({"role": "assistant", "content": res})
+            return res
         except Exception:
             return "Saya adalah Autonomous AI Agent Platform lokal yang siap membantu Anda mengeksekusi tugas di laptop ini."
 
 model_backend = LocalModelBackend()
 
 def extract_file_target(text: str) -> str:
-    """Ekstrak nama file atau path dari teks instruksi pengguna"""
     text_clean = text.strip()
     name = None
-
-    # Prioritas 1: Pola setelah kata 'bernama' atau 'dengan nama'
     m = re.search(r'(?:bernama|dengan nama|nama)\s+[\'"]?([a-zA-Z0-9_\-\.]+)[\'"]?', text_clean, re.IGNORECASE)
     if m:
         name = m.group(1).strip()
     else:
-        # Prioritas 2: Pola setelah kata 'file' (hindari menangkap kata 'bernama')
         m2 = re.search(r'file\s+[\'"]?(?:bernama\s+)?([a-zA-Z0-9_\-\.]+)[\'"]?', text_clean, re.IGNORECASE)
         if m2:
             candidate = m2.group(1).strip()
@@ -106,13 +112,36 @@ def extract_file_target(text: str) -> str:
     if not name:
         name = "output.txt"
 
-    # Jika nama belum ada ekstensi, beri ekstensi .txt
     if "." not in name:
         name = f"{name}.txt"
 
     if name.startswith("E:/") or name.startswith("E:\\") or name.startswith("C:/") or name.startswith("C:\\"):
         return name
     return f"E:/agent_system/{name}"
+
+def clean_tool_context(context: str) -> str:
+    """Mengubah context JSON mentah dari tool menjadi format teks yang indah dan rapi"""
+    prefix = "Hasil tool terakhir: "
+    if context.startswith(prefix):
+        raw = context[len(prefix):]
+        try:
+            obj = json.loads(raw)
+            data = obj.get("data", {})
+            if "stdout" in data:
+                out = data["stdout"].strip()
+                err = data.get("stderr", "").strip()
+                if out:
+                    return out
+                elif err:
+                    return f"[Error Terminal]: {err}"
+                return "(Perintah berhasil dieksekusi tanpa output)"
+            elif "content" in data:
+                return data["content"].strip()
+            elif "os" in data:
+                return f"OS: {data.get('os')}, CPU Cores: {data.get('cpu_cores')}, RAM: {data.get('memory_mb')} MB"
+        except Exception:
+            pass
+    return context
 
 def handle_message(msg: dict) -> dict:
     msg_id = msg.get("id", "")
@@ -138,8 +167,9 @@ def handle_message(msg: dict) -> dict:
         tool_names = [t.get("name") for t in tools]
         goal_lower = goal.lower()
 
-        # JIKA SUDAH MENJALANKAN TOOL (Iterasi >= 2)
+        # JIKA SUDAH MENJALANKAN TOOL (Iterasi >= 2) -> LAPORKAN DENGAN BERSIH
         if iteration >= 2 and context and "Hasil tool terakhir" in context:
+            clean_output = clean_tool_context(context)
             if "filesystem.write" in context:
                 m_path = re.search(r'"path":\s*"([^"]+)"', context)
                 saved_path = m_path.group(1) if m_path else "tujuan"
@@ -152,7 +182,7 @@ def handle_message(msg: dict) -> dict:
                         "action": {
                             "type": "finish",
                             "details": {
-                                "summary": f"File berhasil dibuat dan disimpan secara nyata di: {saved_path}"
+                                "summary": f"File berhasil dibuat dan tersimpan secara nyata di: {saved_path}"
                             }
                         }
                     }
@@ -167,7 +197,7 @@ def handle_message(msg: dict) -> dict:
                         "action": {
                             "type": "finish",
                             "details": {
-                                "summary": f"Isi file telah berhasil dibaca:\n{context}"
+                                "summary": f"Berikut isi filenya:\n\n{clean_output}"
                             }
                         }
                     }
@@ -182,7 +212,7 @@ def handle_message(msg: dict) -> dict:
                         "action": {
                             "type": "finish",
                             "details": {
-                                "summary": "Informasi sistem dan perangkat keras laptop telah berhasil diperiksa dan diverifikasi."
+                                "summary": f"Informasi Sistem Laptop:\n{clean_output}"
                             }
                         }
                     }
@@ -193,11 +223,11 @@ def handle_message(msg: dict) -> dict:
                     "id": msg_id,
                     "type": "decision_response",
                     "data": {
-                        "thought": "Perintah shell telah dieksekusi.",
+                        "thought": "Perintah shell telah dieksekusi dengan sukses.",
                         "action": {
                             "type": "finish",
                             "details": {
-                                "summary": f"Hasil eksekusi perintah shell:\n{context}"
+                                "summary": f"Ya, saya bisa menggunakan terminal! Berikut hasil eksekusi perintah terminal nyata di laptopmu:\n\n{clean_output}"
                             }
                         }
                     }
@@ -208,7 +238,7 @@ def handle_message(msg: dict) -> dict:
         # 1. Intent Menulis / Membuat File (filesystem.write)
         if "filesystem.write" in tool_names and iteration == 1 and any(w in goal_lower for w in ["buat", "bikin", "tulis", "create", "write"]) and "file" in goal_lower:
             target_path = extract_file_target(goal)
-            content_to_write = f"File '{Path(target_path).name}' berhasil dibuat secara otonom oleh Local AI Agent Platform.\nWaktu instruksi: {goal}"
+            content_to_write = f"File '{Path(target_path).name}' berhasil dibuat secara otonom oleh Local AI Agent Platform.\nWaktu pembuatan: {goal}"
             return {
                 "version": 1,
                 "id": msg_id,
@@ -268,7 +298,7 @@ def handle_message(msg: dict) -> dict:
             }
 
         # 4. Intent Eksekusi Shell Command (shell.run)
-        if "shell.run" in tool_names and iteration == 1 and any(k in goal_lower for k in ["jalankan perintah", "eksekusi perintah", "run command", "terminal", "shell"]):
+        if "shell.run" in tool_names and iteration == 1 and any(k in goal_lower for k in ["jalankan perintah", "eksekusi perintah", "run command", "terminal", "shell", "apakah kamu bisa menggunakan terminal", "bisa mengunakan terminal"]):
             m_cmd = re.search(r'(?:perintah|command|shell)\s+[:\'"]?(.+?)[\'"]?$', goal, re.IGNORECASE)
             cmd_str = m_cmd.group(1) if m_cmd else "dir"
             return {
@@ -276,7 +306,7 @@ def handle_message(msg: dict) -> dict:
                 "id": msg_id,
                 "type": "decision_response",
                 "data": {
-                    "thought": f"Menjalankan perintah shell '{cmd_str}' secara aman.",
+                    "thought": f"Membuktikan akses terminal dengan menjalankan perintah shell '{cmd_str}' secara aman.",
                     "action": {
                         "type": "tool_call",
                         "details": {
@@ -289,7 +319,7 @@ def handle_message(msg: dict) -> dict:
                 }
             }
 
-        # 5. Pertanyaan Umum / Percakapan Biasa (Chat Langsung via Model LLM)
+        # 5. Pertanyaan Umum / Percakapan Biasa (Chat Langsung via Model LLM dengan Memori)
         if iteration == 1:
             answer = model_backend.answer_direct(goal)
             return {
@@ -297,7 +327,7 @@ def handle_message(msg: dict) -> dict:
                 "id": msg_id,
                 "type": "decision_response",
                 "data": {
-                    "thought": "Menganalisis instruksi pengguna dan menjawab langsung dengan model AI.",
+                    "thought": "Menganalisis instruksi pengguna dan merumuskan respons cerdas.",
                     "action": {
                         "type": "finish",
                         "details": {
