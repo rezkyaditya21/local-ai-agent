@@ -138,9 +138,20 @@ document.addEventListener('DOMContentLoaded', () => {
       headerRam.textContent = `${data.ram.used_gb}/${data.ram.total_gb} GB`;
       ramProgressFill.style.width = `${data.ram.percent}%`;
 
-      // Active Model
+      // Active Model & Dynamic Dropdown Update
       if (data.active_model) {
         activeModelDisplay.textContent = data.active_model;
+      }
+
+      if (data.models) {
+        Object.keys(data.models).forEach(key => {
+          const m = data.models[key];
+          const opt = modelSelectorSide.querySelector(`option[value="${key}"]`);
+          if (opt) {
+            opt.textContent = m.label;
+            opt.disabled = !m.available;
+          }
+        });
       }
     } catch (err) {
       console.warn("Telemetry fetch error:", err);

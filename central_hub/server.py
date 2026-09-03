@@ -73,6 +73,29 @@ def get_system_telemetry():
         elif "7b" in txt.lower():
             active_model = "Qwen 2.5 Coder 7B (Standar)"
 
+    # Detect availability of models
+    m1_5_available = Path("C:/Users/rezky/Documents/models/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf").exists() or Path("E:/agent_system/models/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf").exists()
+    m7_available = Path("C:/Users/rezky/Documents/models/qwen2.5-coder-7b-instruct-q4_k_m.gguf").exists() or Path("E:/agent_system/models/qwen2.5-coder-7b-instruct-q4_k_m.gguf").exists()
+    m14_available = Path("E:/agent_system/models/qwen2.5-coder-14b-instruct-q4_k_m.gguf").exists()
+
+    models_info = {
+        "1.5b": {
+            "name": "Qwen 1.5B (Kilat)",
+            "available": m1_5_available,
+            "label": "Qwen 1.5B (Kilat) " + ("[Tersedia]" if m1_5_available else "[Sedang Unduh/Offline]")
+        },
+        "7b": {
+            "name": "Qwen 7B (Standar)",
+            "available": m7_available,
+            "label": "Qwen 7B (Standar) " + ("[Tersedia]" if m7_available else "[Offline]")
+        },
+        "14b": {
+            "name": "Qwen 14B (Super Pintar)",
+            "available": m14_available,
+            "label": "Qwen 14B (Super Pintar) " + ("[Tersedia]" if m14_available else "[Perlu Colok Harddisk E]")
+        }
+    }
+
     return {
         "cpu_cores": cpu_cores,
         "ram": {
@@ -85,7 +108,8 @@ def get_system_telemetry():
             "C": c_info,
             "E": e_info
         },
-        "active_model": active_model
+        "active_model": active_model,
+        "models": models_info
     }
 
 def clean_system_disk():
